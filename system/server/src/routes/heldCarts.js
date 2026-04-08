@@ -1,0 +1,153 @@
+import { Router } from "express";
+import { Prisma } from "@prisma/client";
+import { prisma } from "../lib/prisma.js";
+import { authMiddleware } from "../middleware/auth.js";
+import { writeAudit } from "../lib/auditLog.js";
+
+const router = Router();
+router.use(authMiddleware);
+
+const MAX_HELD_PER_USER_BRANCH = 15;
+
+async function normalizeCartPayload(tx, branchId, rawItems) {
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    throw new Error("السلة فارغة");
+  }
+  const out = [];
+  for (const line of rawItems) {
+    const productId = line?.productId;
+    if (!productId) continue;
+    const product = await tx.product.findUnique({
+      where: { id: String(productId) },
+      include: { inventories: { where: { branchId: String(branchId) } } },
+    });
+    if (!product) continue;
+    const inv = product.inventories[0];
+    const stock = inv?.quantity ?? 0;
+    const want = Math.max(1, Math.floor(Number(line.quantity) || 1));
+    const qty = Math.min(want, stock);
+    if (qty < 1) continue;
+    out.push({
+      productId: product.id,
+      name: product.name,
+      nameEn: product.nameEn,
+      imageUrl: product.imageUrl,
+      unitPrice: Number(product.price),
+      quantity: qty,
+      maxStock: stock,
+    });
+  }
+  if (!out.length) throw new Error("لا توجد أصناف صالحة أو المخزون غير كافٍ");
+  const subtotal = out.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  return { items: out, subtotal };
+}
+
+router.get("/", async (req, res) => {
+  const qBranch = req.query.branchId;
+  const bid = qBranch || req.user.branchId;
+  if (!bid) return res.json([]);
+  if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== String(bid)) {
+    return res.status(403).json({ error: "غير مصرح" });
+  }
+  const where = { branchId: String(bid) };
+  if (req.user.role === "CASHIER") {
+    where.userId = req.user.sub;
+  }
+  const rows = await prisma.heldCart.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    include: { user: { select: { id: true, name: true } } },
+  });
+  res.json(rows);
+});
+
+router.post("/", async (req, res) => {
+  const {
+    branchId: bodyBranch,
+    label,
+    items: rawItems,
+    customerId,
+    discountInput,
+    taxPercent,
+  } = req.body || {};
+  const bid = bodyBranch || req.user.branchId;
+  if (!bid) return res.status(400).json({ error: "يجب اختيار الفرع" });
+  if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== String(bid)) {
+    return res.status(403).json({ error: "لا يمكن التعليق لفرع آخر" });
+  }
+
+  try {
+    const existing = await prisma.heldCart.count({
+      where: { branchId: String(bid), userId: req.user.sub },
+    });
+    if (existing >= MAX_HELD_PER_USER_BRANCH) {
+      return res.status(400).json({
+        error: `الحد الأقصى ${MAX_HELD_PER_USER_BRANCH} فواتير معلّقة لكل مستخدم في الفرع`,
+      });
+    }
+
+    const created = await prisma.$transaction(async (tx) => {
+      const { items, subtotal } = await normalizeCartPayload(tx, bid, rawItems);
+      const payload = {
+        items,
+        customerId:
+          customerId != null && String(customerId).trim() ? String(customerId).trim() : "",
+        discountInput: discountInput != null ? String(discountInput) : "",
+        taxPercent: taxPercent != null ? String(taxPercent) : "0",
+      };
+      return tx.heldCart.create({
+        data: {
+          branchId: String(bid),
+          userId: req.user.sub,
+          label: label != null && String(label).trim() ? String(label).trim().slice(0, 80) : null,
+          payload,
+          lineCount: items.length,
+          subtotal: new Prisma.Decimal(subtotal.toFixed(2)),
+        },
+        include: { user: { select: { name: true } } },
+      });
+    });
+
+    await writeAudit({
+      userId: req.user.sub,
+      action: "HELD_CART_CREATE",
+      entityType: "HeldCart",
+      entityId: created.id,
+      branchId: String(bid),
+      summary: `Held ${created.lineCount} lines`,
+    });
+
+    res.status(201).json(created);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "فشل تعليق السلة";
+    res.status(400).json({ error: msg });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  const row = await prisma.heldCart.findUnique({ where: { id: req.params.id } });
+  if (!row) return res.status(404).json({ error: "غير موجود" });
+  if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== row.branchId) {
+    return res.status(403).json({ error: "غير مصرح" });
+  }
+  const canDelete =
+    row.userId === req.user.sub ||
+    req.user.role === "ADMIN" ||
+    req.user.role === "MANAGER";
+  if (!canDelete) {
+    return res.status(403).json({ error: "يمكنك حذف تعليقاتك فقط" });
+  }
+  await prisma.heldCart.delete({ where: { id: row.id } });
+  await writeAudit({
+    userId: req.user.sub,
+    action: "HELD_CART_DELETE",
+    entityType: "HeldCart",
+    entityId: row.id,
+    branchId: row.branchId,
+    summary: "Deleted held cart",
+  });
+  res.status(204).end();
+});
+
+export default router;

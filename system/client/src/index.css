@@ -1,0 +1,695 @@
+/* الوضع الداكن (افتراضي) */
+:root {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #334155;
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent2: #a78bfa;
+  --accent-deep: #0284c7;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --border: rgba(255, 255, 255, 0.1);
+  --chart-grid: #334155;
+  --login-gradient: radial-gradient(circle at top, #1e3a5f, var(--bg));
+  --radius: 14px;
+  --touch: 48px;
+  /* أزرار POS / تفاعلية — تباين أوضح في الليل */
+  --pay-btn-bg: #1a2436;
+  --pay-btn-bg-hover: #243044;
+  --pay-btn-border: rgba(148, 163, 184, 0.35);
+  --pay-btn-active-bg: rgba(56, 189, 248, 0.22);
+  --pay-btn-active-border: #5ac8fa;
+  --pay-btn-active-glow: rgba(56, 189, 248, 0.45);
+  --pay-btn-icon-active: #7dd3fc;
+  --split-btn-bg: #273549;
+  --split-btn-bg-hover: #31445c;
+  --split-btn-border: rgba(148, 163, 184, 0.32);
+  --split-btn-on-bg: rgba(167, 139, 250, 0.24);
+  --split-btn-on-border: #c4b5fd;
+  --split-hint-bg: rgba(148, 163, 184, 0.16);
+  --split-hint-on-bg: rgba(167, 139, 250, 0.32);
+  --split-hint-text: #e2e8f0;
+  --checkout-btn-from: #3ee8b5;
+  --checkout-btn-to: #0d9f6e;
+  --checkout-btn-text: #042f21;
+  --checkout-btn-shadow: 0 4px 20px rgba(52, 211, 153, 0.38);
+  --btn-secondary-bg: #2d3b52;
+  --btn-secondary-hover: #3a4d6b;
+  font-family: "Tajawal", system-ui, sans-serif;
+}
+
+/* الوضع الفاتح */
+[data-theme="light"] {
+  --bg: #f1f5f9;
+  --surface: #ffffff;
+  --surface2: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --accent: #0284c7;
+  --accent2: #7c3aed;
+  --accent-deep: #0369a1;
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --border: rgba(15, 23, 42, 0.12);
+  --chart-grid: #cbd5e1;
+  --login-gradient: radial-gradient(circle at top, #bae6fd, #f1f5f9);
+  --pay-btn-bg: var(--surface);
+  --pay-btn-bg-hover: color-mix(in srgb, var(--surface) 90%, var(--accent) 10%);
+  --pay-btn-border: var(--border);
+  --pay-btn-active-bg: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  --pay-btn-active-border: var(--accent);
+  --pay-btn-active-glow: color-mix(in srgb, var(--accent) 35%, transparent);
+  --pay-btn-icon-active: var(--accent-deep);
+  --split-btn-bg: var(--surface2);
+  --split-btn-bg-hover: color-mix(in srgb, var(--surface2) 88%, var(--accent2) 12%);
+  --split-btn-border: var(--border);
+  --split-btn-on-bg: color-mix(in srgb, var(--accent2) 14%, var(--surface));
+  --split-btn-on-border: var(--accent2);
+  --split-hint-bg: color-mix(in srgb, var(--muted) 18%, var(--surface));
+  --split-hint-on-bg: color-mix(in srgb, var(--accent2) 22%, var(--surface));
+  --split-hint-text: var(--muted);
+  --checkout-btn-from: var(--success);
+  --checkout-btn-to: #047857;
+  --checkout-btn-text: #fff;
+  --checkout-btn-shadow: 0 2px 12px rgba(5, 150, 105, 0.28);
+  --btn-secondary-bg: var(--surface2);
+  --btn-secondary-hover: #cbd5e1;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s ease, color 0.15s ease;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.btn-touch {
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: 0.65rem 1.1rem;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform 0.08s ease, opacity 0.15s, background 0.2s ease, color 0.2s ease;
+}
+.btn-touch:active {
+  transform: scale(0.97);
+}
+
+/* أزرار ثانوية بلون surface2 — أوضح عندما لا يكون الوضع فاتحاً */
+html:not([data-theme="light"]) button.btn-touch[style*="surface2"]:not(:disabled) {
+  background: var(--btn-secondary-bg) !important;
+  border: 1px solid var(--pay-btn-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+html:not([data-theme="light"]) button.btn-touch[style*="surface2"]:not(:disabled):hover {
+  background: var(--btn-secondary-hover) !important;
+}
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--border);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.product-card-pos--clickable:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+}
+.product-card-pos--clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* هيكل التطبيق: سايدبار + محتوى */
+.app-layout-shell {
+  display: flex;
+  min-height: 100vh;
+  align-items: stretch;
+}
+
+.app-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-inline-end: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 12px;
+  min-height: 100vh;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  max-height: 100vh;
+  overflow-y: auto;
+  z-index: 20;
+  transition:
+    width 0.22s ease,
+    padding 0.22s ease,
+    opacity 0.2s ease,
+    max-height 0.22s ease,
+    border-color 0.2s ease;
+}
+
+.app-sidebar--collapsed {
+  width: 0 !important;
+  min-width: 0;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-inline-end-color: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-sidebar-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-sidebar-brand {
+  font-size: 18px;
+  font-weight: 800;
+  padding: 8px 10px;
+  color: var(--text);
+  line-height: 1.3;
+  flex: 1;
+  min-width: 0;
+}
+
+.app-sidebar-pin {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1;
+  background: var(--surface2);
+  color: var(--text);
+  transition: transform 0.08s ease, background 0.2s ease;
+}
+
+.app-sidebar-pin:active {
+  transform: scale(0.96);
+}
+
+.app-menu-toggle {
+  flex-shrink: 0;
+}
+
+.app-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app-main-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 15;
+}
+
+.app-main-content {
+  flex: 1;
+  padding: 16px;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .app-layout-shell {
+    flex-direction: column;
+  }
+  .app-sidebar {
+    width: 100%;
+    min-height: 0;
+    position: relative;
+    max-height: 42vh;
+    border-inline-end: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .app-sidebar--collapsed {
+    width: 100% !important;
+    max-height: 0 !important;
+    min-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border-bottom: none;
+    opacity: 0;
+  }
+}
+
+.grid-products {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.85rem;
+}
+
+/* صفحة POS: إبقاء زر الدفع والإجمالي ضمن الشاشة */
+.pos-page-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.pos-top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.pos-top-bar__title {
+  margin: 0;
+  flex: 1 1 100%;
+  font-size: clamp(1.1rem, 2vw, 1.4rem);
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.pos-checkout-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pos-column-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+/* السلة: لا تُضغَط ارتفاعها داخل عمود flex (كانت تختفي قائمة الأسطر) */
+.pos-cart-wrap {
+  flex-shrink: 0;
+}
+
+.pos-cart-wrap__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pos-cart-wrap__head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.pos-cart-wrap__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.pos-checkout-dock {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.18);
+}
+
+.pos-checkout-dock__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.pos-checkout-dock__hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.pos-checkout-dock__msg {
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.pos-checkout-dock__btn {
+  width: 100%;
+  background: linear-gradient(135deg, var(--checkout-btn-from), var(--checkout-btn-to)) !important;
+  color: var(--checkout-btn-text) !important;
+  font-weight: 800;
+  box-shadow: var(--checkout-btn-shadow);
+  border: 1px solid color-mix(in srgb, var(--checkout-btn-to) 55%, transparent);
+}
+
+.pos-checkout-dock__btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.pos-checkout-dock__btn:disabled {
+  opacity: 0.5;
+  box-shadow: none;
+  filter: none;
+}
+
+/* طرق الدفع — أيقونات */
+.pos-payment-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  margin-bottom: 10px;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.pos-payment-heading__icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  opacity: 0.9;
+  color: var(--accent);
+}
+
+.pos-pay-method-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.pos-pay-method-group--compact {
+  margin-bottom: 0;
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.pos-pay-method-btn {
+  flex: 1 1 76px;
+  min-height: 72px;
+  max-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 2px solid var(--pay-btn-border);
+  background: var(--pay-btn-bg);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.08s ease,
+    box-shadow 0.18s ease;
+}
+
+.pos-pay-method-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--pay-btn-border));
+  background: var(--pay-btn-bg-hover);
+}
+
+.pos-pay-method-btn:active {
+  transform: scale(0.97);
+}
+
+.pos-pay-method-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pos-pay-method-btn--active {
+  border-color: var(--pay-btn-active-border);
+  background: var(--pay-btn-active-bg);
+  box-shadow:
+    0 0 0 1px var(--pay-btn-active-glow),
+    0 4px 16px rgba(56, 189, 248, 0.12);
+}
+
+.pos-pay-method-btn__icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.pos-pay-method-btn__label {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.pos-pay-method-btn--active .pos-pay-method-btn__icon {
+  color: var(--pay-btn-icon-active);
+}
+
+.pos-pay-method-btn--compact {
+  flex: 1 1 52px;
+  min-height: 48px;
+  max-width: none;
+  min-width: 48px;
+  padding: 6px 4px;
+  border-radius: 10px;
+}
+
+.pos-pay-method-btn--compact .pos-pay-method-btn__icon {
+  width: 22px;
+  height: 22px;
+}
+
+.pos-split-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  border: 2px solid var(--split-btn-border);
+  background: var(--split-btn-bg);
+  color: var(--text);
+  cursor: pointer;
+  text-align: start;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.08s ease,
+    box-shadow 0.18s ease;
+}
+
+.pos-split-toggle:hover {
+  border-color: color-mix(in srgb, var(--accent2) 52%, var(--split-btn-border));
+  background: var(--split-btn-bg-hover);
+}
+
+.pos-split-toggle:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 2px;
+}
+
+.pos-split-toggle--on {
+  border-color: var(--split-btn-on-border);
+  background: var(--split-btn-on-bg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent2) 35%, transparent);
+}
+
+.pos-split-toggle__icon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  color: var(--accent2);
+}
+
+.pos-split-toggle__label {
+  flex: 1;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.pos-split-toggle__hint {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--split-hint-bg);
+  color: var(--split-hint-text);
+}
+
+.pos-split-toggle--on .pos-split-toggle__hint {
+  background: var(--split-hint-on-bg);
+  color: var(--text);
+}
+
+.pos-split-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.pos-products-frame {
+  max-height: calc(100vh - 210px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-inline-end: 6px;
+}
+
+@media (min-width: 900px) {
+  .grid-products {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+}
+
+@media (min-width: 960px) {
+  .pos-grid {
+    min-height: calc(100dvh - 188px);
+  }
+
+  .pos-checkout-column {
+    max-height: calc(100dvh - 188px);
+  }
+
+  .pos-column-scroll {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-inline-end: 4px;
+  }
+
+  .pos-checkout-dock {
+    margin-top: 0;
+    border-radius: 0 0 var(--radius) var(--radius);
+    border-top: 1px solid var(--border);
+  }
+
+  .pos-products-frame {
+    max-height: none;
+    height: 100%;
+    min-height: calc(100dvh - 188px);
+    align-self: stretch;
+  }
+}
+
+/* لوحات متوسطة: عمود دفع بحد أقصى للارتفاع دون تداخل مع الشريط الجانبي */
+@media (min-width: 769px) and (max-width: 959px) {
+  .pos-checkout-column {
+    max-height: calc(100dvh - 188px);
+  }
+
+  .pos-column-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-inline-end: 4px;
+  }
+
+  .pos-checkout-dock {
+    border-radius: 0 0 var(--radius) var(--radius);
+  }
+}
+
+@media (max-width: 768px) {
+  .pos-page-root {
+    padding-bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pos-checkout-dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    margin: 0;
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--surface) 92%, var(--bg));
+    backdrop-filter: blur(10px);
+  }
+}
+
+@media (max-width: 959px) {
+  .pos-products-frame {
+    max-height: none;
+    overflow: visible;
+    padding-inline-end: 0;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-invoice,
+  .print-invoice * {
+    visibility: visible;
+  }
+  .print-invoice {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    padding: 24px;
+    background: #fff !important;
+    color: #111 !important;
+  }
+}

@@ -1,0 +1,283 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  CASHIER
+}
+
+enum PetType {
+  CAT
+  DOG
+  OTHER
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  ONLINE
+  SPLIT
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sales     Sale[]
+}
+
+model Brand {
+  id         String    @id @default(cuid())
+  supabaseId String?   @unique
+  name       String
+  nameEn     String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  products   Product[]
+}
+
+model Category {
+  id         String    @id @default(cuid())
+  supabaseId String?   @unique
+  name       String
+  nameEn     String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  products   Product[] @relation("ProductCategory")
+}
+
+model Branch {
+  id          String        @id @default(cuid())
+  name        String
+  nameEn      String?
+  address     String?
+  supabaseId  String?       @unique
+  createdAt   DateTime      @default(now())
+  users       User[]
+  inventories Inventory[]
+  sales       Sale[]
+  refunds     Refund[]
+  purchases   Purchase[]
+  cashSessions CashSession[]
+  auditLogs   AuditLog[]
+  heldCarts   HeldCart[]
+}
+
+model Supplier {
+  id        String     @id @default(cuid())
+  name      String
+  phone     String?
+  note      String?
+  createdAt DateTime   @default(now())
+  purchases Purchase[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  nameEn       String?
+  role         Role
+  branchId     String?
+  branch       Branch?  @relation(fields: [branchId], references: [id])
+  sales        Sale[]
+  refunds      Refund[]
+  purchases    Purchase[]
+  cashSessionsOpened CashSession[] @relation("CashSessionOpenedBy")
+  cashSessionsClosed CashSession[] @relation("CashSessionClosedBy")
+  auditLogs          AuditLog[]
+  heldCarts    HeldCart[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Product {
+  id          String        @id @default(cuid())
+  name        String
+  nameEn      String?
+  description String?
+  sku         String?       @unique
+  barcode     String?
+  price       Decimal
+  cost        Decimal?
+  petType     PetType       @default(OTHER)
+  category    String?
+  brandId     String?
+  brand       Brand?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  categoryId  String?
+  productCategory Category? @relation("ProductCategory", fields: [categoryId], references: [id], onDelete: SetNull)
+  imageUrl    String?
+  isActive    Boolean       @default(true)
+  externalId  String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  inventories Inventory[]
+  saleItems   SaleItem[]
+  refundItems  RefundItem[]
+  purchaseItems PurchaseItem[]
+}
+
+model Inventory {
+  id            String   @id @default(cuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branchId      String
+  branch        Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  quantity      Int      @default(0)
+  minStockLevel Int      @default(5)
+
+  @@unique([productId, branchId])
+}
+
+model Sale {
+  id            String        @id @default(cuid())
+  branchId      String
+  branch        Branch        @relation(fields: [branchId], references: [id])
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  customerId    String?
+  customer      Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  total          Decimal
+  discountAmount Decimal       @default(0)
+  taxAmount      Decimal       @default(0)
+  paymentMethod PaymentMethod
+  /// عند paymentMethod = SPLIT: [{ "method": "CASH"|"CARD"|"ONLINE", "amount": number }]
+  paymentSplits Json?
+  cashSessionId String?
+  cashSession   CashSession?  @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime      @default(now())
+  items         SaleItem[]
+  refunds       Refund[]
+}
+
+/// فاتورة معلّقة (تعليق سلة) لنفس الفرع والمستخدم
+model HeldCart {
+  id        String   @id @default(cuid())
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String?
+  payload   Json
+  lineCount Int      @default(0)
+  subtotal  Decimal  @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([branchId, userId])
+}
+
+model CashSession {
+  id                 String    @id @default(cuid())
+  branchId           String
+  branch             Branch    @relation(fields: [branchId], references: [id])
+  openedByUserId     String
+  openedBy           User      @relation("CashSessionOpenedBy", fields: [openedByUserId], references: [id])
+  closedByUserId     String?
+  closedBy           User?     @relation("CashSessionClosedBy", fields: [closedByUserId], references: [id])
+  openedAt           DateTime  @default(now())
+  closedAt           DateTime?
+  openingFloat       Decimal   @default(0)
+  closingCountedCash Decimal?
+  expectedCash       Decimal?
+  cashVariance       Decimal?
+  note               String?
+  sales              Sale[]
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String?
+  entityId   String?
+  branchId   String?
+  branch     Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  summary    String?
+  meta       String?
+  createdAt  DateTime @default(now())
+}
+
+model Refund {
+  id        String   @id @default(cuid())
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  saleId    String?
+  sale      Sale?    @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  total     Decimal
+  note      String?
+  createdAt DateTime @default(now())
+  items     RefundItem[]
+}
+
+model RefundItem {
+  id        String  @id @default(cuid())
+  refundId  String
+  refund    Refund  @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Decimal
+  subtotal  Decimal
+}
+
+model Purchase {
+  id         String   @id @default(cuid())
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  branchId   String
+  branch     Branch   @relation(fields: [branchId], references: [id])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  note       String?
+  createdAt  DateTime @default(now())
+  items      PurchaseItem[]
+}
+
+model PurchaseItem {
+  id         String   @id @default(cuid())
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  quantity   Int
+  unitCost   Decimal
+  subtotal   Decimal
+}
+
+model SaleItem {
+  id        String   @id @default(cuid())
+  saleId    String
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Decimal
+  subtotal  Decimal
+}
+
+/// إعدادات مزامنة الموقع (API Key + آخر وقت تحديث)
+model SyncSettings {
+  id                  String    @id @default(cuid())
+  websiteBaseUrl      String?
+  apiKey              String?
+  lastProductSyncAt   DateTime?
+  lastOrderSyncAt     DateTime?
+  lastSupabaseSyncAt  DateTime?
+  updatedAt           DateTime  @updatedAt
+}
