@@ -37,6 +37,8 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: "/index.html",
+        /** لا تعامل طلبات الـ API كصفحة SPA (وإلا يُرجَع index.html وتظهر صفحة الدخول) */
+        navigateFallbackDenylist: [/^\/api\b/],
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,woff2}"],
         runtimeCaching: [
           {
