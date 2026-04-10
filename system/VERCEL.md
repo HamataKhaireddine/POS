@@ -10,9 +10,9 @@
 
 ### مستودع الجذر فيه مجلد `system/` (مثل `POS MiniZoo` على GitHub)
 
-في جذر المستودع يوجد **`package.json`** و **`vercel.json`** يوجّهان البناء إلى `system/` — يمكن ترك **Root Directory** في Vercel على **`.`** (فارغ).
+عيّن في Vercel **Settings → General → Root Directory** القيمة **`system`** (إلزامي حتى يُعثر على `api/` و`vercel.json` الصحيحين).
 
-إذا فضّلت عدم الاعتماد على ذلك: عيّن **Root Directory** إلى **`system`** (يُستخدم حينها `system/vercel.json` فقط).
+من الطرفية من جذر الريبو: `npm run vercel:prod` (ينشر مجلد `system/` كجذر المشروع).
 
 ### مستودع Git = محتويات `system` فقط (بدون مجلد `system`)
 
@@ -20,7 +20,7 @@
 
 ### خطأ `vite build` / exit **127**
 
-يحدث عندما يعتبر Vercel الجذر مجلد **`client`** أو يكتشف Vite من `system/client` دون تشغيل `npm run build:vercel`. الحل: إما **Root Directory = `system`** أو دفع **`vercel.json` في جذر الريبو** (كما فُعل في هذا المشروع).
+يحدث عندما يكون **Root Directory** على جذر الريبو (`.`) دون توجيه، فيكتشف Vercel Vite ويشغّل `vite build` مباشرة. الحل: **Root Directory = `system`** (أو `npm run vercel:prod` من جذر الريبو).
 
 ## أوامر البناء (مضبوطة في `vercel.json`)
 
@@ -68,7 +68,7 @@
 ## خطوات سريعة (لوحة Vercel)
 
 1. **New Project** → استورد المستودع.
-2. **Root Directory**: `POS MiniZoo/system` (أو `.` إن كان المستودع هو `system` فقط).
+2. **Root Directory**: **`system`** إذا كان المستودع يحتوي مجلداً بهذا الاسم (أو `.` إن كان محتوى `system` فقط في جذر الريبو).
 3. Framework Preset: **Other** (أو اترك الاكتشاف التلقائي إن قرأ `vercel.json`).
 4. أضف متغيرات البيئة أعلاه.
 5. **Deploy**.

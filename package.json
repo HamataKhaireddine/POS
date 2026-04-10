@@ -2,9 +2,10 @@
   "name": "pos-minizoo-repo",
   "private": true,
   "version": "1.0.0",
-  "description": "Root for Git/Vercel; app lives in system/. Vercel Root Directory can stay . thanks to vercel.json here.",
+  "description": "Monorepo root. App in system/. On Vercel set Root Directory to \"system\" (or: npm run vercel:prod).",
   "scripts": {
     "build": "npm run build:vercel --prefix system",
-    "vercel-build": "npm run build:vercel --prefix system"
+    "vercel-build": "npm run build:vercel --prefix system",
+    "vercel:prod": "npx vercel deploy --prod --yes system"
   }
 }
