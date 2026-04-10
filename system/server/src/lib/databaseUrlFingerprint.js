@@ -27,6 +27,17 @@ export function databaseUrlFingerprint() {
     const pgbouncer =
       u.searchParams.get("pgbouncer") === "true" ||
       /pgbouncer=true/i.test(u.search);
+    const sslmode = u.searchParams.get("sslmode") || "";
+    const isSupabase =
+      host.includes("supabase.co") || host.includes("supabase.com");
+    let hint;
+    if (!pgbouncer && host.includes("pooler")) {
+      hint =
+        "مضيف pooler: أضف ?pgbouncer=true (أو &pgbouncer=true) — راجع Prisma + Supabase.";
+    } else if (isSupabase && !sslmode) {
+      hint =
+        "جرّب إلحاق &sslmode=require (أو ?sslmode=require) إن فشل الاتصال من Vercel.";
+    }
     return {
       databaseUrlSet: true,
       looksLikePostgresUri: true,
@@ -34,9 +45,8 @@ export function databaseUrlFingerprint() {
       port: u.port || "(افتراضي)",
       database: (u.pathname || "").replace(/^\//, "") || "(غير محدد)",
       pgbouncerParam: pgbouncer,
-      hint: !pgbouncer && host.includes("pooler")
-        ? "أنت تستخدم مضيف pooler؛ غالباً تحتاج ?pgbouncer=true في نهاية الرابط (راجع وثائق Prisma + Supabase)."
-        : undefined,
+      sslmode: sslmode || "(غير مضبوط)",
+      hint,
     };
   } catch {
     return {
