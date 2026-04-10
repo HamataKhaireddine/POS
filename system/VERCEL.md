@@ -8,9 +8,19 @@
 
 ## هيكل المشروع
 
-إذا كان المستودع على GitHub هو **محتويات مجلد `system` فقط** (مستودع [POS](https://github.com/HamataKhaireddine/POS))، اترك **Root Directory** فارغاً أو `.`.
+### مستودع الجذر فيه مجلد `system/` (مثل `POS MiniZoo` على GitHub)
 
-إذا كان المستودع أعلى (مثلاً مجلد `Neol` كاملاً)، عيّن **Root Directory** إلى: `POS MiniZoo/system`
+في جذر المستودع يوجد **`package.json`** و **`vercel.json`** يوجّهان البناء إلى `system/` — يمكن ترك **Root Directory** في Vercel على **`.`** (فارغ).
+
+إذا فضّلت عدم الاعتماد على ذلك: عيّن **Root Directory** إلى **`system`** (يُستخدم حينها `system/vercel.json` فقط).
+
+### مستودع Git = محتويات `system` فقط (بدون مجلد `system`)
+
+اترك **Root Directory** على **`.`** واستخدم `vercel.json` داخل نفس الجذر.
+
+### خطأ `vite build` / exit **127**
+
+يحدث عندما يعتبر Vercel الجذر مجلد **`client`** أو يكتشف Vite من `system/client` دون تشغيل `npm run build:vercel`. الحل: إما **Root Directory = `system`** أو دفع **`vercel.json` في جذر الريبو** (كما فُعل في هذا المشروع).
 
 ## أوامر البناء (مضبوطة في `vercel.json`)
 
@@ -20,7 +30,14 @@
 | Build Command      | `npm run build:vercel`    |
 | Output Directory   | `client/dist`             |
 
-`build:vercel` يشغّل: `prisma generate` + `prisma migrate deploy` + بناء الواجهة (Vite + PWA).
+`build:vercel` يشغّل: `prisma generate` + بناء الواجهة (Vite + PWA). **لا يشغّل `migrate deploy` أثناء البناء** حتى لا يفشل النشر إذا لم تكن `DATABASE_URL` متاحة وقت البناء.
+
+لتطبيق الهجرات على قاعدة الإنتاج (بعد تغيير `schema` أو عند أول إعداد):
+
+- من جهازك (مع `DATABASE_URL` لقاعدة الإنتاج):  
+  `npm run db:deploy --prefix server`  
+- أو عرّف `DATABASE_URL` في Vercel واستخدم سكربت البناء البديل:  
+  `build:vercel:migrate` (يضم `prisma migrate deploy` قبل بناء الواجهة).
 
 ## متغيرات البيئة في Vercel
 

@@ -2,6 +2,7 @@
 system/node_modules/
 system/client/node_modules/
 system/server/node_modules/
+system/server/src/generated/
 system/.env
 system/.env.local
 system/client/.env

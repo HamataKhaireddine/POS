@@ -20,6 +20,11 @@ import purchaseRoutes from "./routes/purchases.js";
 import cashSessionRoutes from "./routes/cashSessions.js";
 import auditRoutes from "./routes/audit.js";
 import heldCartRoutes from "./routes/heldCarts.js";
+import { prisma } from "./lib/prisma.js";
+import {
+  dbUnavailableMessage,
+  isDbUnavailableError,
+} from "./lib/dbErrors.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -31,6 +36,21 @@ app.use("/api", apiRateLimiter);
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "petstore-pos-api" });
+});
+
+/** فحص اتصال قاعدة البيانات (مفيد لتشخيص 500 على Vercel) */
+app.get("/api/health/db", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ ok: true, db: true });
+  } catch (e) {
+    console.error("[health/db]", e);
+    res.status(503).json({
+      ok: false,
+      db: false,
+      error: "تعذر الاتصال بقاعدة البيانات",
+    });
+  }
 });
 
 app.use("/api/auth", authRoutes);
@@ -54,6 +74,10 @@ app.use((err, _req, res, _next) => {
     return res.status(400).json({
       error: "تعذر قراءة الطلب (JSON غير صالح أو تالف)",
     });
+  }
+  if (isDbUnavailableError(err)) {
+    console.error("[db]", err.message);
+    return res.status(503).json({ error: dbUnavailableMessage });
   }
   console.error(err);
   res.status(500).json({ error: "خطأ في الخادم" });

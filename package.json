@@ -1,0 +1,10 @@
+{
+  "name": "pos-minizoo-repo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Root for Git/Vercel; app lives in system/. Vercel Root Directory can stay . thanks to vercel.json here.",
+  "scripts": {
+    "build": "npm run build:vercel --prefix system",
+    "vercel-build": "npm run build:vercel --prefix system"
+  }
+}

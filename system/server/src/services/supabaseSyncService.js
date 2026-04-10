@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "../lib/prisma-client-bundle.js";
 import { prisma } from "../lib/prisma.js";
 import { resolveStoredImageUrl } from "../lib/productImageUrl.js";
 import { getSupabaseServer } from "../lib/supabase.js";

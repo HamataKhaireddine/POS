@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "prisma generate",
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "db:generate": "prisma generate",
+    "db:generate:clean": "node scripts/prisma-generate-clean.mjs",
     "db:validate": "prisma validate",
     "db:deploy": "prisma migrate deploy",
     "db:push": "prisma db push",
@@ -15,7 +15,7 @@
     "db:seed": "node prisma/seed.js"
   },
   "dependencies": {
-    "@prisma/client": "^6.5.0",
+    "@prisma/client": "6.19.0",
     "@supabase/supabase-js": "^2.101.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -24,7 +24,7 @@
     "express-rate-limit": "^8.3.2",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-    "prisma": "^6.5.0"
+    "prisma": "6.19.0"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

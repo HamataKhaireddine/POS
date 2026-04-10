@@ -4,7 +4,7 @@
  * — جاهزة لتوسيعها لتطابق مسارات API لموقعك الحالي
  */
 
-import { Prisma } from "@prisma/client";
+import { Prisma } from "../lib/prisma-client-bundle.js";
 import { prisma } from "../lib/prisma.js";
 import { decryptSecret, encryptSecret } from "../lib/secretCrypto.js";
 
