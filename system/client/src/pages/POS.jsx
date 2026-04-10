@@ -11,7 +11,19 @@ import {
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner.js";
 import { useCartStore } from "../store/cartStore.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useOffline } from "../context/OfflineContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
+import {
+  applyOfflineSaleToInventory,
+  hydrateInventoryFromProducts,
+  loadProductsForBranch,
+  saveCustomers,
+  saveProductsForBranch,
+  loadCustomers,
+} from "../offline/cache.js";
+import { getOrCreateDeviceId, SYNC_TYPES } from "../offline/db.js";
+import { enqueue } from "../offline/syncQueue.js";
+import { buildOfflineSalePreview } from "../offline/offlineSale.js";
 import { branchDisplayName } from "../utils/displayLabels.js";
 import { buildReceiptPlainText } from "../utils/receiptText.js";
 
@@ -21,6 +33,7 @@ function round2(n) {
 
 export default function POS() {
   const { user } = useAuth();
+  const { refreshPending } = useOffline();
   const { t, locale } = useI18n();
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState(user?.branchId || "");
@@ -65,8 +78,18 @@ export default function POS() {
   const replaceAll = useCartStore((s) => s.replaceAll);
 
   useEffect(() => {
+    const offline = typeof navigator !== "undefined" && !navigator.onLine;
+    if (offline) {
+      loadCustomers()
+        .then(setCustomers)
+        .catch(() => setCustomers([]));
+      return;
+    }
     api("/api/customers")
-      .then(setCustomers)
+      .then(async (list) => {
+        setCustomers(list);
+        await saveCustomers(list);
+      })
       .catch(() => setCustomers([]));
   }, []);
 
@@ -92,8 +115,34 @@ export default function POS() {
     if (bid) q.set("branchId", bid);
     if (search) q.set("search", search);
     if (petFilter) q.set("petType", petFilter);
-    const list = await api(`/api/products?${q.toString()}`);
-    setProducts(list);
+    const offline = typeof navigator !== "undefined" && !navigator.onLine;
+    if (offline) {
+      let list = await loadProductsForBranch(bid);
+      if (search) {
+        const s = search.toLowerCase();
+        list = list.filter(
+          (p) =>
+            (p.name && p.name.toLowerCase().includes(s)) ||
+            (p.nameEn && p.nameEn.toLowerCase().includes(s)) ||
+            (p.sku && String(p.sku).toLowerCase().includes(s)) ||
+            (p.barcode && String(p.barcode).toLowerCase().includes(s))
+        );
+      }
+      if (petFilter) list = list.filter((p) => p.petType === petFilter);
+      setProducts(list);
+      return;
+    }
+    try {
+      const list = await api(`/api/products?${q.toString()}`);
+      setProducts(list);
+      if (bid) {
+        await saveProductsForBranch(bid, list);
+        await hydrateInventoryFromProducts(bid, list);
+      }
+    } catch {
+      const list = await loadProductsForBranch(bid);
+      setProducts(list);
+    }
   }, [branchId, user?.branchId, search, petFilter]);
 
   const loadHeldCarts = useCallback(async () => {
@@ -246,21 +295,78 @@ export default function POS() {
       paymentSplits = parsed;
     }
 
+    const body = {
+      branchId: bid,
+      customerId: customerId || undefined,
+      discountAmount: discountNum > 0 ? discountNum : undefined,
+      taxPercent: taxPctNum > 0 ? taxPctNum : undefined,
+      items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+    };
+    if (paymentSplits) {
+      body.paymentSplits = paymentSplits;
+    } else {
+      body.paymentMethod = paymentMethod;
+    }
+
+    const offline = typeof navigator !== "undefined" && !navigator.onLine;
+    if (offline) {
+      const cached = await loadProductsForBranch(bid);
+      if (cached.length === 0) {
+        setMsg(t("offline.needCache"));
+        return;
+      }
+      setLoading(true);
+      try {
+        const clientMutationId = crypto.randomUUID();
+        const deviceId = await getOrCreateDeviceId();
+        const payload = {
+          ...body,
+          clientMutationId,
+          deviceId,
+        };
+        await enqueue(SYNC_TYPES.SALE, clientMutationId, payload);
+        await applyOfflineSaleToInventory(
+          bid,
+          items.map((i) => ({ productId: i.productId, quantity: i.quantity }))
+        );
+        const cust = customerId ? customers.find((c) => c.id === customerId) : null;
+        const preview = buildOfflineSalePreview({
+          clientMutationId,
+          branchName,
+          cashierName: user?.name || "—",
+          cartItems: items,
+          total: round2(amountDue),
+          discountAmount: discountNum,
+          taxAmount: round2(taxPreview),
+          paymentMethod,
+          paymentSplits,
+          customer: cust ? { id: cust.id, name: cust.name, phone: cust.phone || undefined } : null,
+        });
+        setLastSale(preview);
+        setCopyDone(false);
+        clearCart();
+        setCustomerId("");
+        setDiscountInput("");
+        setTaxPercent("0");
+        setSplitEnabled(false);
+        setSplitRows([
+          { method: "CASH", amount: "" },
+          { method: "CARD", amount: "" },
+        ]);
+        setMsg(t("offline.savedLocal"));
+        await refreshPending();
+        await loadProducts();
+        setTimeout(() => window.print(), 200);
+      } catch (e) {
+        setMsg(e.message || t("pos.saleFailed"));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     setLoading(true);
     try {
-      const body = {
-        branchId: bid,
-        customerId: customerId || undefined,
-        discountAmount: discountNum > 0 ? discountNum : undefined,
-        taxPercent: taxPctNum > 0 ? taxPctNum : undefined,
-        items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
-      };
-      if (paymentSplits) {
-        body.paymentSplits = paymentSplits;
-      } else {
-        body.paymentMethod = paymentMethod;
-      }
-
       const sale = await api("/api/sales/checkout", {
         method: "POST",
         body,

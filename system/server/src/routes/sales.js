@@ -54,6 +54,8 @@ router.post("/checkout", async (req, res) => {
     customerId,
     discountAmount: discountRaw,
     taxPercent: taxPercentRaw,
+    clientMutationId: clientMutationIdRaw,
+    deviceId: _deviceId,
   } = req.body || {};
   const bid = branchId || req.user.branchId;
   if (!bid) return res.status(400).json({ error: "يجب اختيار الفرع" });
@@ -66,6 +68,29 @@ router.post("/checkout", async (req, res) => {
 
   if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== bid) {
     return res.status(403).json({ error: "لا يمكن البيع لفرع آخر" });
+  }
+
+  const clientMutationId =
+    clientMutationIdRaw != null && String(clientMutationIdRaw).trim()
+      ? String(clientMutationIdRaw).trim()
+      : null;
+
+  if (clientMutationId) {
+    const existing = await prisma.sale.findUnique({
+      where: { clientMutationId },
+      include: {
+        items: { include: { product: true } },
+        branch: true,
+        customer: true,
+        user: { select: { id: true, name: true } },
+      },
+    });
+    if (existing) {
+      if (existing.branchId !== bid || existing.userId !== req.user.sub) {
+        return res.status(409).json({ error: "تعارض معرف المزامنة" });
+      }
+      return res.status(200).json(existing);
+    }
   }
 
   let custId = null;
@@ -130,6 +155,7 @@ router.post("/checkout", async (req, res) => {
           branchId: bid,
           userId: req.user.sub,
           customerId: custId,
+          ...(clientMutationId ? { clientMutationId } : {}),
           total: grandTotal,
           discountAmount: discountDec,
           taxAmount: taxDec,
@@ -181,6 +207,24 @@ router.post("/checkout", async (req, res) => {
 
     res.status(201).json(sale);
   } catch (e) {
+    if (
+      clientMutationId &&
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === "P2002"
+    ) {
+      const replay = await prisma.sale.findUnique({
+        where: { clientMutationId },
+        include: {
+          items: { include: { product: true } },
+          branch: true,
+          customer: true,
+          user: { select: { id: true, name: true } },
+        },
+      });
+      if (replay) {
+        return res.status(200).json(replay);
+      }
+    }
     const msg = e instanceof Error ? e.message : "فشل إتمام البيع";
     res.status(400).json({ error: msg });
   }

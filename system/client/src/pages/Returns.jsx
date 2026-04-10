@@ -1,7 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useOffline } from "../context/OfflineContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
+import {
+  applyOfflineRefundToInventory,
+  hydrateInventoryFromProducts,
+  loadProductsForBranch,
+  saveProductsForBranch,
+} from "../offline/cache.js";
+import { getOrCreateDeviceId, SYNC_TYPES } from "../offline/db.js";
+import { enqueue } from "../offline/syncQueue.js";
 
 const inp = {
   padding: 12,
@@ -14,6 +23,7 @@ const inp = {
 export default function Returns() {
   const { t } = useI18n();
   const { user, isAdmin } = useAuth();
+  const { refreshPending, online } = useOffline();
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState(user?.branchId || "");
   const [products, setProducts] = useState([]);
@@ -37,12 +47,30 @@ export default function Returns() {
     if (!bid) return;
     const q = new URLSearchParams();
     q.set("branchId", bid);
+    const offline = typeof navigator !== "undefined" && !navigator.onLine;
+    if (offline) {
+      loadProductsForBranch(bid)
+        .then(setProducts)
+        .catch(() => setProducts([]));
+      return;
+    }
     api(`/api/products?${q.toString()}`)
-      .then(setProducts)
-      .catch(() => setProducts([]));
+      .then(async (list) => {
+        setProducts(list);
+        await saveProductsForBranch(bid, list);
+        await hydrateInventoryFromProducts(bid, list);
+      })
+      .catch(async () => {
+        const list = await loadProductsForBranch(bid);
+        setProducts(list);
+      });
   }, [branchId, user?.branchId]);
 
   const loadRefunds = () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setList([]);
+      return Promise.resolve();
+    }
     const bid = branchId || user?.branchId;
     const p = new URLSearchParams();
     if (bid) p.set("branchId", bid);
@@ -72,6 +100,31 @@ export default function Returns() {
       return;
     }
     try {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        const cached = await loadProductsForBranch(bid);
+        if (cached.length === 0) {
+          setMsg(t("offline.needCache"));
+          return;
+        }
+        const clientMutationId = crypto.randomUUID();
+        const deviceId = await getOrCreateDeviceId();
+        const body = {
+          branchId: bid,
+          saleId: saleId.trim() || undefined,
+          note: note.trim() || undefined,
+          items,
+          clientMutationId,
+          deviceId,
+        };
+        await enqueue(SYNC_TYPES.REFUND, clientMutationId, body);
+        await applyOfflineRefundToInventory(bid, items);
+        await refreshPending();
+        setLines([{ productId: "", quantity: "1" }]);
+        setSaleId("");
+        setNote("");
+        setMsg(t("offline.savedLocal"));
+        return;
+      }
       await api("/api/refunds", {
         method: "POST",
         body: {
@@ -177,6 +230,9 @@ export default function Returns() {
 
       <div className="card" style={{ overflowX: "auto" }}>
         <strong>{t("returns.recent")}</strong>
+        {!online ? (
+          <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--muted)" }}>{t("returns.offlineListHint")}</p>
+        ) : null}
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, marginTop: 12 }}>
           <thead>
             <tr style={{ color: "var(--muted)", textAlign: "start" }}>

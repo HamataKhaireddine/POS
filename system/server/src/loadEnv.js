@@ -6,7 +6,11 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.join(__dirname, "..", ".env");
 const result = dotenv.config({ path: envPath });
-if (result.error && process.env.NODE_ENV !== "test") {
+if (
+  result.error &&
+  process.env.NODE_ENV !== "test" &&
+  !process.env.DATABASE_URL
+) {
   console.warn(
     "[loadEnv] لم يُعثر على .env في",
     envPath,

@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { useTheme } from "../../context/ThemeContext.jsx";
 import { useI18n } from "../../context/LanguageContext.jsx";
 import { formatUserBranchLine } from "../../utils/displayLabels.js";
+import { OfflineBanner } from "../OfflineBanner.jsx";
 
 const STORAGE_KEY = "sidebarOpen";
 
@@ -66,6 +67,9 @@ export function AppLayout() {
           <NavLink to="/pos" style={sidebarLink} end>
             {t("nav.pos")}
           </NavLink>
+          <NavLink to="/sync-queue" style={sidebarLink}>
+            {t("nav.syncQueue")}
+          </NavLink>
           <NavLink to="/dashboard" style={sidebarLink}>
             {t("nav.dashboard")}
           </NavLink>
@@ -122,6 +126,7 @@ export function AppLayout() {
       </aside>
 
       <div className="app-main-wrap">
+        <OfflineBanner />
         <header className="app-topbar">
           <button
             type="button"

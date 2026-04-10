@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { authMiddleware, requireRole } from "../middleware/auth.js";
 import { writeAudit } from "../lib/auditLog.js";
@@ -114,6 +115,76 @@ router.post("/transfer", requireRole("ADMIN", "MANAGER"), async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "فشل التحويل";
+    res.status(400).json({ error: msg });
+  }
+});
+
+/** تعديل مخزون مع idempotency للمزامنة بعد العمل دون اتصال */
+router.post("/offline-upsert", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+  const {
+    clientMutationId: cmRaw,
+    productId,
+    branchId,
+    quantity,
+    minStockLevel,
+    deviceId: _deviceId,
+  } = req.body || {};
+  const cmid = cmRaw != null && String(cmRaw).trim() ? String(cmRaw).trim() : null;
+  if (!cmid) return res.status(400).json({ error: "clientMutationId مطلوب" });
+  if (!productId || !branchId) {
+    return res.status(400).json({ error: "productId و branchId مطلوبان" });
+  }
+  const bid = String(branchId);
+  if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== bid) {
+    return res.status(403).json({ error: "لا يمكن التعديل لفروع أخرى" });
+  }
+
+  const cached = await prisma.offlineInventoryReceipt.findUnique({
+    where: { clientMutationId: cmid },
+  });
+  if (cached) {
+    return res.status(200).json(cached.payload);
+  }
+
+  try {
+    const inv = await prisma.inventory.upsert({
+      where: {
+        productId_branchId: {
+          productId: String(productId),
+          branchId: bid,
+        },
+      },
+      create: {
+        productId: String(productId),
+        branchId: bid,
+        quantity: Math.max(0, Number(quantity) || 0),
+        minStockLevel: Math.max(0, Number(minStockLevel) || 5),
+      },
+      update: {
+        ...(quantity != null && { quantity: Math.max(0, Number(quantity)) }),
+        ...(minStockLevel != null && {
+          minStockLevel: Math.max(0, Number(minStockLevel)),
+        }),
+      },
+      include: { product: true, branch: true },
+    });
+    const payload = JSON.parse(JSON.stringify(inv));
+    try {
+      await prisma.offlineInventoryReceipt.create({
+        data: { clientMutationId: cmid, payload },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        const again = await prisma.offlineInventoryReceipt.findUnique({
+          where: { clientMutationId: cmid },
+        });
+        if (again) return res.status(200).json(again.payload);
+      }
+      throw e;
+    }
+    res.status(201).json(payload);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "فشل التحديث";
     res.status(400).json({ error: msg });
   }
 });

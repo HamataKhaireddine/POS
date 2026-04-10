@@ -150,6 +150,8 @@ model Sale {
   user          User          @relation(fields: [userId], references: [id])
   customerId    String?
   customer      Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  /// مفتاح من الجهاز/العميل لمنع تكرار نفس البيع عند المزامنة بعد العمل دون اتصال
+  clientMutationId String?    @unique
   total          Decimal
   discountAmount Decimal       @default(0)
   taxAmount      Decimal       @default(0)
@@ -219,10 +221,19 @@ model Refund {
   user      User     @relation(fields: [userId], references: [id])
   saleId    String?
   sale      Sale?    @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  /// مفتاح المزامنة من الجهاز لمنع تكرار نفس الإرجاع
+  clientMutationId String? @unique
   total     Decimal
   note      String?
   createdAt DateTime @default(now())
   items     RefundItem[]
+}
+
+/// ردّ مخزّن لإعادة طلب تعديل مخزون دون اتصال (idempotency)
+model OfflineInventoryReceipt {
+  clientMutationId String   @id
+  payload          Json
+  createdAt        DateTime @default(now())
 }
 
 model RefundItem {

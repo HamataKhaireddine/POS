@@ -3,6 +3,7 @@ node_modules/
 server/.env
 client/.env
 dist/
+client/dist/
 build/
 *.log
 server/dev.db

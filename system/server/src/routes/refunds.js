@@ -26,8 +26,22 @@ router.get("/", async (req, res) => {
   res.json(rows);
 });
 
+const refundInclude = {
+  items: { include: { product: true } },
+  branch: true,
+  sale: true,
+  user: { select: { name: true } },
+};
+
 router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
-  const { branchId, saleId, note, items } = req.body || {};
+  const {
+    branchId,
+    saleId,
+    note,
+    items,
+    clientMutationId: clientMutationIdRaw,
+    deviceId: _deviceId,
+  } = req.body || {};
   const bid = branchId || req.user.branchId;
   if (!bid) return res.status(400).json({ error: "يجب اختيار الفرع" });
   if (!Array.isArray(items) || items.length === 0) {
@@ -35,6 +49,24 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   }
   if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== bid) {
     return res.status(403).json({ error: "لا يمكن الإرجاع لفرع آخر" });
+  }
+
+  const clientMutationId =
+    clientMutationIdRaw != null && String(clientMutationIdRaw).trim()
+      ? String(clientMutationIdRaw).trim()
+      : null;
+
+  if (clientMutationId) {
+    const existing = await prisma.refund.findUnique({
+      where: { clientMutationId },
+      include: refundInclude,
+    });
+    if (existing) {
+      if (existing.branchId !== bid || existing.userId !== req.user.sub) {
+        return res.status(409).json({ error: "تعارض معرف المزامنة" });
+      }
+      return res.status(200).json(existing);
+    }
   }
 
   let saleRef = null;
@@ -65,6 +97,7 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
           branchId: bid,
           userId: req.user.sub,
           saleId: saleRef?.id ?? null,
+          ...(clientMutationId ? { clientMutationId } : {}),
           total,
           note: note != null && String(note).trim() ? String(note).trim() : null,
           items: {
@@ -76,12 +109,7 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
             })),
           },
         },
-        include: {
-          items: { include: { product: true } },
-          branch: true,
-          sale: true,
-          user: { select: { name: true } },
-        },
+        include: refundInclude,
       });
 
       for (const l of lineData) {
@@ -116,6 +144,19 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
 
     res.status(201).json(refund);
   } catch (e) {
+    if (
+      clientMutationId &&
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === "P2002"
+    ) {
+      const replay = await prisma.refund.findUnique({
+        where: { clientMutationId },
+        include: refundInclude,
+      });
+      if (replay) {
+        return res.status(200).json(replay);
+      }
+    }
     const msg = e instanceof Error ? e.message : "فشل تسجيل الإرجاع";
     res.status(400).json({ error: msg });
   }

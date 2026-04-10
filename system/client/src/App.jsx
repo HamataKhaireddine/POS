@@ -17,6 +17,7 @@ import Transfer from "./pages/Transfer.jsx";
 import Count from "./pages/Count.jsx";
 import Cash from "./pages/Cash.jsx";
 import Audit from "./pages/Audit.jsx";
+import SyncQueueStatus from "./pages/SyncQueueStatus.jsx";
 
 function Protected({ children, roles }) {
   const { user, loading } = useAuth();
@@ -48,6 +49,7 @@ export default function App() {
       >
         <Route path="/" element={<Navigate to="/pos" replace />} />
         <Route path="/pos" element={<POS />} />
+        <Route path="/sync-queue" element={<SyncQueueStatus />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/products" element={<Products />} />
         <Route path="/customers" element={<Customers />} />

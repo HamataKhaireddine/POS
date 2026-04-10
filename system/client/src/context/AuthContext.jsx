@@ -1,7 +1,19 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api, getToken } from "../api/client.js";
+import { decodeJwtPayload, minimalUserFromTokenPayload } from "../lib/jwtDecode.js";
+import {
+  getCachedSessionUser,
+  setCachedSessionUser,
+} from "../lib/sessionUserCache.js";
 
 const AuthContext = createContext(null);
+
+function applySessionFromTokenFallback() {
+  const token = getToken();
+  if (!token) return null;
+  const p = decodeJwtPayload(token);
+  return minimalUserFromTokenPayload(p);
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -12,13 +24,50 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
+
+    const offline = typeof navigator !== "undefined" && !navigator.onLine;
+    if (offline) {
+      const cached = getCachedSessionUser();
+      setUser(cached || applySessionFromTokenFallback());
+      setLoading(false);
+      return;
+    }
+
     api("/api/auth/me")
-      .then(setUser)
-      .catch(() => {
-        localStorage.removeItem("token");
-        setUser(null);
+      .then((u) => {
+        setUser(u);
+        setCachedSessionUser(u);
+      })
+      .catch((err) => {
+        if (err?.status === 401) {
+          localStorage.removeItem("token");
+          setCachedSessionUser(null);
+          setUser(null);
+          return;
+        }
+        const cached = getCachedSessionUser();
+        if (cached) {
+          setUser(cached);
+          return;
+        }
+        setUser(applySessionFromTokenFallback());
       })
       .finally(() => setLoading(false));
+  }, []);
+
+  /** عند عودة الشبكة حدّث المستخدم من السيرفر */
+  useEffect(() => {
+    const onOnline = () => {
+      if (!getToken()) return;
+      api("/api/auth/me")
+        .then((u) => {
+          setUser(u);
+          setCachedSessionUser(u);
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
   }, []);
 
   const login = async (email, password) => {
@@ -28,11 +77,13 @@ export function AuthProvider({ children }) {
     });
     localStorage.setItem("token", data.token);
     setUser(data.user);
+    setCachedSessionUser(data.user);
     return data.user;
   };
 
   const logout = () => {
     localStorage.removeItem("token");
+    setCachedSessionUser(null);
     setUser(null);
   };
 

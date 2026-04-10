@@ -15,7 +15,13 @@ router.post("/login", async (req, res, next) => {
       where: { email: String(email).toLowerCase().trim() },
       include: { branch: true },
     });
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    let passwordOk = false;
+    try {
+      passwordOk = await bcrypt.compare(password, user.passwordHash);
+    } catch {
+      passwordOk = false;
+    }
+    if (!user || !passwordOk) {
       return res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
     }
     const token = signToken({

@@ -6,8 +6,7 @@
   "functions": {
     "api/[...slug].js": {
       "maxDuration": 60,
-      "memory": 1024,
-      "includeFiles": "server/**"
+      "memory": 1024
     }
   },
   "rewrites": [
