@@ -11,7 +11,10 @@
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/[...slug].js" },
-    { "source": "/((?!.*\\.).*)", "destination": "/index.html" }
+    { "source": "/api/:path*", "destination": "/api/[...slug]" },
+    {
+      "source": "/((?!api/)(?!.*\\.).*)",
+      "destination": "/index.html"
+    }
   ]
 }
