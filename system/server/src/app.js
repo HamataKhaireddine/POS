@@ -25,6 +25,7 @@ import {
   dbUnavailableMessage,
   isDbUnavailableError,
 } from "./lib/dbErrors.js";
+import { databaseUrlFingerprint } from "./lib/databaseUrlFingerprint.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -38,18 +39,26 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "petstore-pos-api" });
 });
 
-/** فحص اتصال قاعدة البيانات (مفيد لتشخيص 500 على Vercel) */
+/** فحص اتصال قاعدة البيانات + بصمة آمنة لـ DATABASE_URL (بدون أسرار) */
 app.get("/api/health/db", async (_req, res) => {
+  const urlInfo = databaseUrlFingerprint();
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true, db: true });
+    res.json({ ok: true, db: true, urlInfo });
   } catch (e) {
     console.error("[health/db]", e);
-    res.status(503).json({
+    const body = {
       ok: false,
       db: false,
       error: "تعذر الاتصال بقاعدة البيانات",
-    });
+      urlInfo,
+      prismaCode: e?.code ?? undefined,
+    };
+    if (e?.message && typeof e.message === "string") {
+      const safe = e.message.replace(/postgresql:\/\/[^@\s]+@/gi, "postgresql://***@");
+      body.prismaMessage = safe.slice(0, 280);
+    }
+    res.status(503).json(body);
   }
 });
 
