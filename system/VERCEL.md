@@ -10,7 +10,9 @@
 
 ### مستودع الجذر فيه مجلد `system/` (مثل `POS MiniZoo` على GitHub)
 
-عيّن في Vercel **Settings → General → Root Directory** القيمة **`system`** (إلزامي حتى يُعثر على `api/` و`vercel.json` الصحيحين).
+عيّن في Vercel **Settings → General → Root Directory** القيمة **`system`** (لتشغيل **API** و`api/[...slug].js`). إن تركت الجذر `.` فسيُقرأ `vercel.json` من جذر المستودع (البناء فقط؛ الـ API قد لا يعمل إلا مع Root = `system`).
+
+**Settings → Build & Development:** Framework Preset = **Other**. إذا كان **Override** على Build Command = `vite build` فألغِه.
 
 من الطرفية من جذر الريبو: `npm run vercel:prod` (ينشر مجلد `system/` كجذر المشروع).
 
