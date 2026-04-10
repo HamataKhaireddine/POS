@@ -118,44 +118,32 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   const bid = branchId || req.user.branchId;
   if (!bid) return res.status(400).json({ error: "يجب تحديد الفرع للمخزون الأولي" });
 
-  const product = await prisma.$transaction(async (tx) => {
-    const p = await tx.product.create({
-      data: {
-        name: name.trim(),
-        nameEn: nameEn?.trim() || null,
-        description: description?.trim() || null,
-        sku: sku?.trim() || null,
-        barcode: barcode?.trim() || null,
-        price: new Prisma.Decimal(priceNum),
-        cost:
-          cost != null && cost !== ""
-            ? new Prisma.Decimal(Number(cost))
-            : null,
-        petType: ["CAT", "DOG", "OTHER"].includes(String(petType))
-          ? String(petType)
-          : "OTHER",
-        category: category != null && String(category).trim() ? String(category).trim() : null,
-        imageUrl: imageUrl?.trim() || null,
+  const product = await prisma.product.create({
+    data: {
+      name: name.trim(),
+      nameEn: nameEn?.trim() || null,
+      description: description?.trim() || null,
+      sku: sku?.trim() || null,
+      barcode: barcode?.trim() || null,
+      price: new Prisma.Decimal(priceNum),
+      cost:
+        cost != null && cost !== ""
+          ? new Prisma.Decimal(Number(cost))
+          : null,
+      petType: ["CAT", "DOG", "OTHER"].includes(String(petType))
+        ? String(petType)
+        : "OTHER",
+      category: category != null && String(category).trim() ? String(category).trim() : null,
+      imageUrl: imageUrl?.trim() || null,
+      inventories: {
+        create: {
+          branchId: bid,
+          quantity: Math.max(0, Number(initialStock) || 0),
+          minStockLevel: Math.max(0, Number(minStockLevel) || 5),
+        },
       },
-    });
-    await tx.inventory.upsert({
-      where: {
-        productId_branchId: { productId: p.id, branchId: bid },
-      },
-      create: {
-        productId: p.id,
-        branchId: bid,
-        quantity: Math.max(0, Number(initialStock) || 0),
-        minStockLevel: Math.max(0, Number(minStockLevel) || 5),
-      },
-      update: {
-        quantity: { increment: Math.max(0, Number(initialStock) || 0) },
-      },
-    });
-    return tx.product.findUnique({
-      where: { id: p.id },
-      include: { inventories: true },
-    });
+    },
+    include: { inventories: true },
   });
   res.status(201).json(withResolvedImageUrl(product));
 });

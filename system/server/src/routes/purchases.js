@@ -47,24 +47,52 @@ router.post("/receive", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   const applyCost = Boolean(updateProductCost);
 
   try {
-    const purchase = await prisma.$transaction(async (tx) => {
-      let total = new Prisma.Decimal(0);
-      const lineData = [];
+    let total = new Prisma.Decimal(0);
+    const lineData = [];
 
-      for (const line of items) {
-        const productId = line.productId;
-        const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
-        const uc = Number(line.unitCost);
-        if (Number.isNaN(uc) || uc < 0) throw new Error("تكلفة الوحدة غير صالحة");
-        const product = await tx.product.findUnique({ where: { id: productId } });
-        if (!product) throw new Error(`منتج غير موجود: ${productId}`);
-        const unitCost = new Prisma.Decimal(uc.toFixed(2));
-        const subtotal = unitCost.mul(qty);
-        total = total.add(subtotal);
-        lineData.push({ productId, quantity: qty, unitCost, subtotal });
+    for (const line of items) {
+      const productId = line.productId;
+      const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
+      const uc = Number(line.unitCost);
+      if (Number.isNaN(uc) || uc < 0) throw new Error("تكلفة الوحدة غير صالحة");
+      const product = await prisma.product.findUnique({ where: { id: productId } });
+      if (!product) throw new Error(`منتج غير موجود: ${productId}`);
+      const unitCost = new Prisma.Decimal(uc.toFixed(2));
+      const subtotal = unitCost.mul(qty);
+      total = total.add(subtotal);
+      lineData.push({ productId, quantity: qty, unitCost, subtotal });
+    }
+
+    const afterPurchase = [];
+    for (const l of lineData) {
+      afterPurchase.push(
+        prisma.inventory.upsert({
+          where: {
+            productId_branchId: { productId: l.productId, branchId: bid },
+          },
+          create: {
+            productId: l.productId,
+            branchId: bid,
+            quantity: l.quantity,
+            minStockLevel: 5,
+          },
+          update: {
+            quantity: { increment: l.quantity },
+          },
+        }),
+      );
+      if (applyCost) {
+        afterPurchase.push(
+          prisma.product.update({
+            where: { id: l.productId },
+            data: { cost: l.unitCost },
+          }),
+        );
       }
+    }
 
-      const created = await tx.purchase.create({
+    const purchaseResults = await prisma.$transaction([
+      prisma.purchase.create({
         data: {
           supplierId: supId,
           branchId: bid,
@@ -85,33 +113,11 @@ router.post("/receive", requireRole("ADMIN", "MANAGER"), async (req, res) => {
           supplier: true,
           user: { select: { name: true } },
         },
-      });
+      }),
+      ...afterPurchase,
+    ]);
 
-      for (const l of lineData) {
-        await tx.inventory.upsert({
-          where: {
-            productId_branchId: { productId: l.productId, branchId: bid },
-          },
-          create: {
-            productId: l.productId,
-            branchId: bid,
-            quantity: l.quantity,
-            minStockLevel: 5,
-          },
-          update: {
-            quantity: { increment: l.quantity },
-          },
-        });
-        if (applyCost) {
-          await tx.product.update({
-            where: { id: l.productId },
-            data: { cost: l.unitCost },
-          });
-        }
-      }
-
-      return created;
-    });
+    const purchase = purchaseResults[0];
 
     await writeAudit({
       userId: req.user.sub,

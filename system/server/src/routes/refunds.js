@@ -77,22 +77,22 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   }
 
   try {
-    const refund = await prisma.$transaction(async (tx) => {
-      let total = new Prisma.Decimal(0);
-      const lineData = [];
+    let total = new Prisma.Decimal(0);
+    const lineData = [];
 
-      for (const line of items) {
-        const productId = line.productId;
-        const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
-        const product = await tx.product.findUnique({ where: { id: productId } });
-        if (!product) throw new Error(`منتج غير موجود: ${productId}`);
-        const unitPrice = product.price;
-        const subtotal = unitPrice.mul(qty);
-        total = total.add(subtotal);
-        lineData.push({ productId, quantity: qty, unitPrice, subtotal });
-      }
+    for (const line of items) {
+      const productId = line.productId;
+      const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
+      const product = await prisma.product.findUnique({ where: { id: productId } });
+      if (!product) throw new Error(`منتج غير موجود: ${productId}`);
+      const unitPrice = product.price;
+      const subtotal = unitPrice.mul(qty);
+      total = total.add(subtotal);
+      lineData.push({ productId, quantity: qty, unitPrice, subtotal });
+    }
 
-      const created = await tx.refund.create({
+    const refundResults = await prisma.$transaction([
+      prisma.refund.create({
         data: {
           branchId: bid,
           userId: req.user.sub,
@@ -110,10 +110,9 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
           },
         },
         include: refundInclude,
-      });
-
-      for (const l of lineData) {
-        await tx.inventory.upsert({
+      }),
+      ...lineData.map((l) =>
+        prisma.inventory.upsert({
           where: {
             productId_branchId: { productId: l.productId, branchId: bid },
           },
@@ -126,11 +125,11 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
           update: {
             quantity: { increment: l.quantity },
           },
-        });
-      }
+        }),
+      ),
+    ]);
 
-      return created;
-    });
+    const refund = refundResults[0];
 
     await writeAudit({
       userId: req.user.sub,

@@ -29,11 +29,11 @@ router.post("/reconcile", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
-      for (const line of lines) {
+    await prisma.$transaction(
+      lines.map((line) => {
         const productId = line.productId;
         const q = Math.max(0, Math.floor(Number(line.quantity) || 0));
-        await tx.inventory.upsert({
+        return prisma.inventory.upsert({
           where: {
             productId_branchId: { productId, branchId: bid },
           },
@@ -45,8 +45,8 @@ router.post("/reconcile", requireRole("ADMIN", "MANAGER"), async (req, res) => {
           },
           update: { quantity: q },
         });
-      }
-    });
+      }),
+    );
     await writeAudit({
       userId: req.user.sub,
       action: "INVENTORY_RECONCILE",
@@ -77,22 +77,26 @@ router.post("/transfer", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
-      for (const line of items) {
-        const productId = line.productId;
-        const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
-        const src = await tx.inventory.findUnique({
-          where: { productId_branchId: { productId, branchId: from } },
-        });
-        if (!src || src.quantity < qty) {
-          const p = await tx.product.findUnique({ where: { id: productId } });
-          throw new Error(`كمية غير كافية: ${p?.name || productId}`);
-        }
-        await tx.inventory.update({
+    const prep = [];
+    for (const line of items) {
+      const productId = line.productId;
+      const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
+      const src = await prisma.inventory.findUnique({
+        where: { productId_branchId: { productId, branchId: from } },
+      });
+      if (!src || src.quantity < qty) {
+        const p = await prisma.product.findUnique({ where: { id: productId } });
+        return res.status(400).json({ error: `كمية غير كافية: ${p?.name || productId}` });
+      }
+      prep.push({ productId, qty });
+    }
+    await prisma.$transaction(
+      prep.flatMap(({ productId, qty }) => [
+        prisma.inventory.update({
           where: { productId_branchId: { productId, branchId: from } },
           data: { quantity: { decrement: qty } },
-        });
-        await tx.inventory.upsert({
+        }),
+        prisma.inventory.upsert({
           where: { productId_branchId: { productId, branchId: to } },
           create: {
             productId,
@@ -101,9 +105,9 @@ router.post("/transfer", requireRole("ADMIN", "MANAGER"), async (req, res) => {
             minStockLevel: 5,
           },
           update: { quantity: { increment: qty } },
-        });
-      }
-    });
+        }),
+      ]),
+    );
     await writeAudit({
       userId: req.user.sub,
       action: "INVENTORY_TRANSFER",

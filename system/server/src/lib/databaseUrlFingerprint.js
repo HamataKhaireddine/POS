@@ -30,8 +30,22 @@ export function databaseUrlFingerprint() {
     const sslmode = u.searchParams.get("sslmode") || "";
     const isSupabase =
       host.includes("supabase.co") || host.includes("supabase.com");
+    const portNum = u.port ? parseInt(u.port, 10) : 5432;
+    const isSupabaseDirectIpv6Style =
+      isSupabase &&
+      /^db\./.test(host) &&
+      host.endsWith(".supabase.co") &&
+      portNum === 5432;
+    // مضيف بحرف واحد (مثل Z) يعني غالباً DATABASE_URL معطوب أو كلمة مرور غير مُرمّزة
+    const hostLooksBroken = !host || /^[A-Za-z]$/.test(host);
     let hint;
-    if (!pgbouncer && host.includes("pooler")) {
+    if (hostLooksBroken) {
+      hint =
+        "اسم المضيف يبدو غير صالح (مثل Z أو قصير جداً). غالباً DATABASE_URL معطوب: لصق ناقص، أو كلمة مرور فيها @ أو : أو # دون ترميز URL — أعد نسخ السلسلة من Supabase واستبدل كلمة المرور فقط بعد ترميزها (مثلاً @ → %40).";
+    } else if (isSupabaseDirectIpv6Style) {
+      hint =
+        "الاتصال المباشر db.*.supabase.co:5432 غالباً IPv6؛ Vercel غالباً IPv4 فيفشل الاتصال. في Supabase: Database → Connect → استخدم Transaction pooler (منفذ 6543، مضيف *.pooler.supabase.com) والصقه في DATABASE_URL مع ?pgbouncer=true&connection_limit=1&sslmode=require (انقل كلمة المرور بنفس الترميز). أو فعّل IPv4 add-on في Supabase.";
+    } else if (!pgbouncer && host.includes("pooler")) {
       hint =
         "مضيف pooler: أضف ?pgbouncer=true (أو &pgbouncer=true) — راجع Prisma + Supabase.";
     } else if (isSupabase && !sslmode) {

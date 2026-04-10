@@ -101,56 +101,56 @@ router.post("/checkout", async (req, res) => {
   }
 
   try {
-    const sale = await prisma.$transaction(async (tx) => {
-      let total = new Prisma.Decimal(0);
-      const lineData = [];
+    let total = new Prisma.Decimal(0);
+    const lineData = [];
 
-      for (const line of items) {
-        const productId = line.productId;
-        const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
-        const product = await tx.product.findUnique({ where: { id: productId } });
-        if (!product) throw new Error(`منتج غير موجود: ${productId}`);
-        const inv = await tx.inventory.findUnique({
-          where: {
-            productId_branchId: { productId, branchId: bid },
-          },
-        });
-        if (!inv || inv.quantity < qty) {
-          throw new Error(`كمية غير كافية: ${product.name}`);
-        }
-        const unitPrice = product.price;
-        const subtotal = unitPrice.mul(qty);
-        total = total.add(subtotal);
-        lineData.push({ productId, quantity: qty, unitPrice, subtotal });
-      }
-
-      const subtotalDec = total;
-      let discountDec = new Prisma.Decimal(0);
-      const d = Number(discountRaw);
-      if (!Number.isNaN(d) && d > 0) {
-        const cap = Number(subtotalDec);
-        const applied = Math.min(d, cap);
-        discountDec = new Prisma.Decimal(applied.toFixed(2));
-      }
-      const afterDiscount = subtotalDec.sub(discountDec);
-      let taxDec = new Prisma.Decimal(0);
-      const tp = Number(taxPercentRaw);
-      if (!Number.isNaN(tp) && tp > 0) {
-        const rate = Math.min(100, tp);
-        taxDec = afterDiscount.mul(new Prisma.Decimal(rate)).div(100);
-      }
-      const grandTotal = afterDiscount.add(taxDec);
-      const grandNum = roundMoney(Number(grandTotal.toString()));
-
-      const splitInfo = normalizePaymentSplits(paymentSplits, grandNum);
-      const pm = splitInfo.useSplit ? "SPLIT" : pmSingle;
-
-      const openSession = await tx.cashSession.findFirst({
-        where: { branchId: bid, closedAt: null },
-        select: { id: true },
+    for (const line of items) {
+      const productId = line.productId;
+      const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
+      const product = await prisma.product.findUnique({ where: { id: productId } });
+      if (!product) throw new Error(`منتج غير موجود: ${productId}`);
+      const inv = await prisma.inventory.findUnique({
+        where: {
+          productId_branchId: { productId, branchId: bid },
+        },
       });
+      if (!inv || inv.quantity < qty) {
+        throw new Error(`كمية غير كافية: ${product.name}`);
+      }
+      const unitPrice = product.price;
+      const subtotal = unitPrice.mul(qty);
+      total = total.add(subtotal);
+      lineData.push({ productId, quantity: qty, unitPrice, subtotal });
+    }
 
-      const created = await tx.sale.create({
+    const subtotalDec = total;
+    let discountDec = new Prisma.Decimal(0);
+    const d = Number(discountRaw);
+    if (!Number.isNaN(d) && d > 0) {
+      const cap = Number(subtotalDec);
+      const applied = Math.min(d, cap);
+      discountDec = new Prisma.Decimal(applied.toFixed(2));
+    }
+    const afterDiscount = subtotalDec.sub(discountDec);
+    let taxDec = new Prisma.Decimal(0);
+    const tp = Number(taxPercentRaw);
+    if (!Number.isNaN(tp) && tp > 0) {
+      const rate = Math.min(100, tp);
+      taxDec = afterDiscount.mul(new Prisma.Decimal(rate)).div(100);
+    }
+    const grandTotal = afterDiscount.add(taxDec);
+    const grandNum = roundMoney(Number(grandTotal.toString()));
+
+    const splitInfo = normalizePaymentSplits(paymentSplits, grandNum);
+    const pm = splitInfo.useSplit ? "SPLIT" : pmSingle;
+
+    const openSession = await prisma.cashSession.findFirst({
+      where: { branchId: bid, closedAt: null },
+      select: { id: true },
+    });
+
+    const txResults = await prisma.$transaction([
+      prisma.sale.create({
         data: {
           branchId: bid,
           userId: req.user.sub,
@@ -177,19 +177,18 @@ router.post("/checkout", async (req, res) => {
           customer: true,
           user: { select: { id: true, name: true } },
         },
-      });
-
-      for (const l of lineData) {
-        await tx.inventory.update({
+      }),
+      ...lineData.map((l) =>
+        prisma.inventory.update({
           where: {
             productId_branchId: { productId: l.productId, branchId: bid },
           },
           data: { quantity: { decrement: l.quantity } },
-        });
-      }
+        }),
+      ),
+    ]);
 
-      return created;
-    });
+    const sale = txResults[0];
 
     await writeAudit({
       userId: req.user.sub,

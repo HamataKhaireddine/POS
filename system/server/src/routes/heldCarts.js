@@ -9,7 +9,7 @@ router.use(authMiddleware);
 
 const MAX_HELD_PER_USER_BRANCH = 15;
 
-async function normalizeCartPayload(tx, branchId, rawItems) {
+async function normalizeCartPayload(db, branchId, rawItems) {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     throw new Error("السلة فارغة");
   }
@@ -17,7 +17,7 @@ async function normalizeCartPayload(tx, branchId, rawItems) {
   for (const line of rawItems) {
     const productId = line?.productId;
     if (!productId) continue;
-    const product = await tx.product.findUnique({
+    const product = await db.product.findUnique({
       where: { id: String(productId) },
       include: { inventories: { where: { branchId: String(branchId) } } },
     });
@@ -87,26 +87,24 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const created = await prisma.$transaction(async (tx) => {
-      const { items, subtotal } = await normalizeCartPayload(tx, bid, rawItems);
-      const payload = {
-        items,
-        customerId:
-          customerId != null && String(customerId).trim() ? String(customerId).trim() : "",
-        discountInput: discountInput != null ? String(discountInput) : "",
-        taxPercent: taxPercent != null ? String(taxPercent) : "0",
-      };
-      return tx.heldCart.create({
-        data: {
-          branchId: String(bid),
-          userId: req.user.sub,
-          label: label != null && String(label).trim() ? String(label).trim().slice(0, 80) : null,
-          payload,
-          lineCount: items.length,
-          subtotal: new Prisma.Decimal(subtotal.toFixed(2)),
-        },
-        include: { user: { select: { name: true } } },
-      });
+    const { items, subtotal } = await normalizeCartPayload(prisma, bid, rawItems);
+    const payload = {
+      items,
+      customerId:
+        customerId != null && String(customerId).trim() ? String(customerId).trim() : "",
+      discountInput: discountInput != null ? String(discountInput) : "",
+      taxPercent: taxPercent != null ? String(taxPercent) : "0",
+    };
+    const created = await prisma.heldCart.create({
+      data: {
+        branchId: String(bid),
+        userId: req.user.sub,
+        label: label != null && String(label).trim() ? String(label).trim().slice(0, 80) : null,
+        payload,
+        lineCount: items.length,
+        subtotal: new Prisma.Decimal(subtotal.toFixed(2)),
+      },
+      include: { user: { select: { name: true } } },
     });
 
     await writeAudit({
