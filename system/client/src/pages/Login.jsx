@@ -11,7 +11,10 @@ export default function Login() {
   const nav = useNavigate();
   const [email, setEmail] = useState("admin@petstore.local");
   const [password, setPassword] = useState("admin123");
+  const [organizationSlug, setOrganizationSlug] = useState("");
   const [err, setErr] = useState("");
+  /** بصمة آمنة من السيرفر عند فشل اتصال قاعدة البيانات (503) */
+  const [dbUrlInfo, setDbUrlInfo] = useState(null);
 
   if (loading) {
     return (
@@ -21,17 +24,26 @@ export default function Login() {
     );
   }
   if (user) {
-    return <Navigate to="/pos" replace />;
+    return (
+      <Navigate to={user.isPlatformAdmin ? "/platform/organizations" : "/pos"} replace />
+    );
   }
 
   const submit = async (e) => {
     e.preventDefault();
     setErr("");
+    setDbUrlInfo(null);
     try {
-      await login(email, password);
-      nav("/pos", { replace: true });
+      const loggedIn = await login(
+        email,
+        password,
+        organizationSlug.trim() ? organizationSlug.trim() : undefined
+      );
+      nav(loggedIn?.isPlatformAdmin ? "/platform/organizations" : "/pos", { replace: true });
     } catch (x) {
       setErr(x.message || t("login.failed"));
+      const info = x?.data?.urlInfo;
+      setDbUrlInfo(info && typeof info === "object" ? info : null);
     }
   };
 
@@ -87,7 +99,25 @@ export default function Login() {
             style={{
               width: "100%",
               padding: 12,
-              borderRadius: 10,
+              borderRadius: 0,
+              border: "1px solid var(--border)",
+              background: "var(--bg)",
+              color: "var(--text)",
+            }}
+          />
+        </label>
+        <label style={{ display: "block", marginBottom: 12 }}>
+          <span style={{ display: "block", marginBottom: 6, color: "var(--muted)" }}>{t("login.orgSlug")}</span>
+          <input
+            value={organizationSlug}
+            onChange={(e) => setOrganizationSlug(e.target.value)}
+            type="text"
+            autoComplete="organization"
+            placeholder="default"
+            style={{
+              width: "100%",
+              padding: 12,
+              borderRadius: 0,
               border: "1px solid var(--border)",
               background: "var(--bg)",
               color: "var(--text)",
@@ -105,7 +135,7 @@ export default function Login() {
             style={{
               width: "100%",
               padding: 12,
-              borderRadius: 10,
+              borderRadius: 0,
               border: "1px solid var(--border)",
               background: "var(--bg)",
               color: "var(--text)",
@@ -114,6 +144,29 @@ export default function Login() {
         </label>
         {err ? (
           <div style={{ color: "var(--danger)", marginBottom: 12, fontSize: 14 }}>{err}</div>
+        ) : null}
+        {dbUrlInfo ? (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: 12,
+              fontSize: 13,
+              lineHeight: 1.45,
+              color: "var(--muted)",
+              background: "var(--surface2)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <strong style={{ color: "var(--text)", display: "block", marginBottom: 6 }}>
+              {t("login.dbDiagnostics")}
+            </strong>
+            {dbUrlInfo.hint ? <div style={{ marginBottom: 8 }}>{dbUrlInfo.hint}</div> : null}
+            {dbUrlInfo.databaseUrlSet && dbUrlInfo.host ? (
+              <div style={{ fontSize: 12, fontFamily: "ui-monospace, monospace" }}>
+                {t("login.dbHost")}: {String(dbUrlInfo.host)} — {t("login.dbPort")}: {String(dbUrlInfo.port ?? "—")}
+              </div>
+            ) : null}
+          </div>
         ) : null}
         <button
           type="submit"

@@ -136,7 +136,7 @@ export default function Users() {
 
 const inp = {
   padding: 10,
-  borderRadius: 10,
+  borderRadius: 0,
   border: "1px solid var(--border)",
   background: "var(--bg)",
   color: "var(--text)",

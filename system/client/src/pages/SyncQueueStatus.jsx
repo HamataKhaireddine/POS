@@ -5,7 +5,7 @@ import { listSyncQueueRows, removeSyncQueueItem } from "../offline/syncQueueList
 
 const card = {
   padding: 16,
-  borderRadius: 12,
+  borderRadius: 0,
   border: "1px solid var(--border)",
   background: "var(--surface)",
 };

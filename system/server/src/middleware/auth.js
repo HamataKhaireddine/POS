@@ -13,7 +13,11 @@ export function authMiddleware(req, res, next) {
     return res.status(401).json({ error: "يجب تسجيل الدخول" });
   }
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET);
+    if (!payload.organizationId) {
+      return res.status(401).json({ error: "انتهت الجلسة — سجّل الدخول مجدداً" });
+    }
+    req.user = payload;
     next();
   } catch {
     return res.status(401).json({ error: "جلسة غير صالحة" });

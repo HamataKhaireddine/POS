@@ -1,14 +1,16 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma.js";
+import { findBranchInOrg } from "../lib/orgScope.js";
 import { authMiddleware, requireRole } from "../middleware/auth.js";
 
 const router = Router();
 router.use(authMiddleware);
 router.use(requireRole("ADMIN"));
 
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
   const users = await prisma.user.findMany({
+    where: { organizationId: req.user.organizationId },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -32,9 +34,14 @@ router.post("/", async (req, res) => {
   if (!["ADMIN", "MANAGER", "CASHIER"].includes(String(role))) {
     return res.status(400).json({ error: "دور غير صالح" });
   }
+  if (branchId) {
+    const b = await findBranchInOrg(prisma, req.user.organizationId, branchId);
+    if (!b) return res.status(400).json({ error: "فرع غير صالح" });
+  }
   const hash = await bcrypt.hash(String(password), 10);
   const user = await prisma.user.create({
     data: {
+      organizationId: req.user.organizationId,
       email: String(email).toLowerCase().trim(),
       passwordHash: hash,
       name: name.trim(),
@@ -57,6 +64,14 @@ router.post("/", async (req, res) => {
 
 router.patch("/:id", async (req, res) => {
   const { name, nameEn, role, branchId, password } = req.body || {};
+  const target = await prisma.user.findFirst({
+    where: { id: req.params.id, organizationId: req.user.organizationId },
+  });
+  if (!target) return res.status(404).json({ error: "غير موجود" });
+  if (branchId) {
+    const b = await findBranchInOrg(prisma, req.user.organizationId, branchId);
+    if (!b) return res.status(400).json({ error: "فرع غير صالح" });
+  }
   const data = {};
   if (name != null) data.name = String(name).trim();
   if (nameEn !== undefined) data.nameEn = nameEn?.trim() || null;
@@ -67,7 +82,7 @@ router.patch("/:id", async (req, res) => {
   if (password) data.passwordHash = await bcrypt.hash(String(password), 10);
 
   const user = await prisma.user.update({
-    where: { id: req.params.id },
+    where: { id: target.id },
     data,
     select: {
       id: true,
@@ -86,7 +101,11 @@ router.delete("/:id", async (req, res) => {
   if (req.params.id === req.user.sub) {
     return res.status(400).json({ error: "لا يمكن حذف حسابك الحالي" });
   }
-  await prisma.user.delete({ where: { id: req.params.id } });
+  const target = await prisma.user.findFirst({
+    where: { id: req.params.id, organizationId: req.user.organizationId },
+  });
+  if (!target) return res.status(404).json({ error: "غير موجود" });
+  await prisma.user.delete({ where: { id: target.id } });
   res.status(204).send();
 });
 

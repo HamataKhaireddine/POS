@@ -16,7 +16,7 @@ function mapPetType(raw) {
  * brands, categories, products, inventory
  * وربط الفروع: ضع UUID فرع Supabase في Branch.supabaseId محلياً
  */
-export async function syncFromSupabase() {
+export async function syncFromSupabase(organizationId) {
   const sb = getSupabaseServer();
   if (!sb) {
     throw new Error(
@@ -30,8 +30,11 @@ export async function syncFromSupabase() {
   for (const b of brandRows || []) {
     const sid = String(b.id);
     const row = await prisma.brand.upsert({
-      where: { supabaseId: sid },
+      where: {
+        organizationId_supabaseId: { organizationId, supabaseId: sid },
+      },
       create: {
+        organizationId,
         supabaseId: sid,
         name: String(b.name || "—").slice(0, 500),
         nameEn: b.name_en != null ? String(b.name_en).slice(0, 500) : null,
@@ -50,8 +53,11 @@ export async function syncFromSupabase() {
   for (const c of catRows || []) {
     const sid = String(c.id);
     const row = await prisma.category.upsert({
-      where: { supabaseId: sid },
+      where: {
+        organizationId_supabaseId: { organizationId, supabaseId: sid },
+      },
       create: {
+        organizationId,
         supabaseId: sid,
         name: String(c.name || "—").slice(0, 500),
         nameEn: c.name_en != null ? String(c.name_en).slice(0, 500) : null,
@@ -74,14 +80,15 @@ export async function syncFromSupabase() {
     const categoryId = p.category_id ? catMap.get(String(p.category_id)) : null;
     let categoryLabel = null;
     if (categoryId) {
-      const c = await prisma.category.findUnique({
-        where: { id: categoryId },
+      const c = await prisma.category.findFirst({
+        where: { id: categoryId, organizationId },
         select: { name: true },
       });
       categoryLabel = c?.name ?? null;
     }
 
     const data = {
+      organizationId,
       name: String(p.name || "منتج").slice(0, 500),
       nameEn: p.name_en != null ? String(p.name_en).slice(0, 500) : null,
       description: p.description != null ? String(p.description) : null,
@@ -102,12 +109,13 @@ export async function syncFromSupabase() {
     };
 
     const existing = await prisma.product.findFirst({
-      where: { externalId: extId },
+      where: { organizationId, externalId: extId },
     });
     if (existing) {
+      const { organizationId: _o, ...updateData } = data;
       await prisma.product.update({
         where: { id: existing.id },
-        data,
+        data: updateData,
       });
     } else {
       await prisma.product.create({ data });
@@ -119,7 +127,7 @@ export async function syncFromSupabase() {
   if (iErr) throw new Error(`Supabase inventory: ${iErr.message}`);
 
   const branches = await prisma.branch.findMany({
-    where: { supabaseId: { not: null } },
+    where: { organizationId, supabaseId: { not: null } },
   });
   const branchBySupa = new Map(
     branches.map((x) => [String(x.supabaseId), x.id])
@@ -136,7 +144,7 @@ export async function syncFromSupabase() {
       continue;
     }
     const product = await prisma.product.findFirst({
-      where: { externalId: pid },
+      where: { organizationId, externalId: pid },
     });
     if (!product) {
       inventorySkipped++;
@@ -170,9 +178,9 @@ export async function syncFromSupabase() {
     inventoryUpserted++;
   }
 
-  const cfg = await getSyncConfig();
+  await getSyncConfig(organizationId);
   await prisma.syncSettings.update({
-    where: { id: cfg.id },
+    where: { organizationId },
     data: { lastSupabaseSyncAt: new Date() },
   });
 

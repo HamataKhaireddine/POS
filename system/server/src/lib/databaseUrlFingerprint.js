@@ -52,6 +52,11 @@ export function databaseUrlFingerprint() {
       hint =
         "جرّب إلحاق &sslmode=require (أو ?sslmode=require) إن فشل الاتصال من Vercel.";
     }
+    const hintFinal =
+      hint ||
+      (isSupabase
+        ? "إن استمر الخطأ: أعد لصق DATABASE_URL من Supabase (Database → Connect → Transaction pooler، منفذ 6543)، واحفظ المتغير في Vercel لبيئة Production ثم Redeploy."
+        : undefined);
     return {
       databaseUrlSet: true,
       looksLikePostgresUri: true,
@@ -60,7 +65,7 @@ export function databaseUrlFingerprint() {
       database: (u.pathname || "").replace(/^\//, "") || "(غير محدد)",
       pgbouncerParam: pgbouncer,
       sslmode: sslmode || "(غير مضبوط)",
-      hint,
+      hint: hintFinal,
     };
   } catch {
     return {

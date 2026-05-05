@@ -13,7 +13,7 @@ export function decodeJwtPayload(token) {
   }
 }
 
-/** حقول من token التوقيع (sub, role, branchId) */
+/** حقول من token التوقيع (sub, role, branchId, organizationId) */
 export function minimalUserFromTokenPayload(p) {
   if (!p?.sub) return null;
   return {
@@ -25,5 +25,9 @@ export function minimalUserFromTokenPayload(p) {
     branchId: p.branchId ?? null,
     branchName: null,
     branchNameEn: null,
+    organizationId: p.organizationId ?? null,
+    organizationName: null,
+    organizationSlug: null,
+    isPlatformAdmin: false,
   };
 }

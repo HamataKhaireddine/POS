@@ -1,6 +1,6 @@
 /**
  * جزء النقد من فاتورة (لحساب المتوقع في جلسة الصندوق).
- * @param {{ paymentMethod: string; total: unknown; paymentSplits?: unknown }} sale
+ * @param {{ paymentMethod: string; total: unknown; amountPaid?: unknown; paymentSplits?: unknown }} sale
  */
 export function cashPortionFromSale(sale) {
   const method = String(sale.paymentMethod || "");
@@ -22,6 +22,14 @@ export function cashPortionFromSale(sale) {
     return Number.isFinite(sum) ? sum : 0;
   }
   if (method === "CASH") {
+    const paid = sale.amountPaid;
+    if (paid != null) {
+      const p =
+        typeof paid === "object" && paid !== null && "toString" in paid
+          ? Number(paid.toString())
+          : Number(paid);
+      if (Number.isFinite(p) && p >= 0) return p;
+    }
     const t = sale.total;
     const n =
       t != null && typeof t === "object" && "toString" in t ? Number(t.toString()) : Number(t);

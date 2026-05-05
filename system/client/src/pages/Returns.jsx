@@ -14,7 +14,7 @@ import { enqueue } from "../offline/syncQueue.js";
 
 const inp = {
   padding: 12,
-  borderRadius: 10,
+  borderRadius: 0,
   border: "1px solid var(--border)",
   background: "var(--bg)",
   color: "var(--text)",

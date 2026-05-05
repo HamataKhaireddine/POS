@@ -8,14 +8,23 @@ router.use(requireRole("ADMIN", "MANAGER"));
 
 router.get("/", async (req, res) => {
   const { branchId, limit = "100", action } = req.query;
-  const where = {};
+  const orgId = req.user.organizationId;
+  const andParts = [
+    {
+      OR: [
+        { branch: { organizationId: orgId } },
+        { user: { organizationId: orgId } },
+      ],
+    },
+  ];
   if (req.user.role !== "ADMIN") {
     if (!req.user.branchId) return res.json([]);
-    where.branchId = req.user.branchId;
+    andParts.push({ branchId: req.user.branchId });
   } else if (branchId) {
-    where.branchId = String(branchId);
+    andParts.push({ branchId: String(branchId) });
   }
-  if (action) where.action = String(action);
+  if (action) andParts.push({ action: String(action) });
+  const where = { AND: andParts };
   const rows = await prisma.auditLog.findMany({
     where,
     orderBy: { createdAt: "desc" },

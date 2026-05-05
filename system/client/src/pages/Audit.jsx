@@ -44,7 +44,7 @@ export default function Audit() {
               style={{
                 minHeight: 44,
                 padding: "8px 12px",
-                borderRadius: 10,
+                borderRadius: 0,
                 background: "var(--surface)",
                 color: "var(--text)",
                 border: "1px solid var(--border)",

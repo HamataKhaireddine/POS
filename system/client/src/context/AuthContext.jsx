@@ -5,6 +5,7 @@ import {
   getCachedSessionUser,
   setCachedSessionUser,
 } from "../lib/sessionUserCache.js";
+import { clearStoredSyncApiKey } from "../lib/syncApiKeySession.js";
 
 const AuthContext = createContext(null);
 
@@ -70,10 +71,16 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("online", onOnline);
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (email, password, organizationSlug) => {
     const data = await api("/api/auth/login", {
       method: "POST",
-      body: { email, password },
+      body: {
+        email,
+        password,
+        ...(organizationSlug != null && String(organizationSlug).trim()
+          ? { organizationSlug: String(organizationSlug).trim() }
+          : {}),
+      },
     });
     localStorage.setItem("token", data.token);
     setUser(data.user);
@@ -85,6 +92,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("token");
     setCachedSessionUser(null);
     setUser(null);
+    clearStoredSyncApiKey();
   };
 
   const value = useMemo(
@@ -95,6 +103,7 @@ export function AuthProvider({ children }) {
       logout,
       isAdmin: user?.role === "ADMIN",
       isManager: user?.role === "MANAGER" || user?.role === "ADMIN",
+      isPlatformAdmin: Boolean(user?.isPlatformAdmin),
     }),
     [user, loading]
   );

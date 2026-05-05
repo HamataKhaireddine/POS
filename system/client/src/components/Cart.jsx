@@ -1,6 +1,7 @@
 import React from "react";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { productDisplayName } from "../utils/productName.js";
+import { isUnitPriceAtOrBelowCost } from "../utils/saleCostWarning.js";
 import { ProductImagePreview } from "./ProductImagePreview.jsx";
 
 /**
@@ -46,6 +47,20 @@ export function Cart({ lines, onChangeQty, onRemove, total, embedded = false }) 
             <div style={{ fontSize: 12, color: "var(--muted)" }}>
               {line.unitPrice.toFixed(2)} × {line.quantity} = {(line.unitPrice * line.quantity).toFixed(2)}
             </div>
+            {isUnitPriceAtOrBelowCost(line.unitPrice, line.cost) ? (
+              <div
+                role="status"
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "var(--warning)",
+                  marginTop: 4,
+                  lineHeight: 1.35,
+                }}
+              >
+                {t("pos.belowCostLine")}
+              </div>
+            ) : null}
           </div>
           <input
             type="number"
@@ -56,7 +71,7 @@ export function Cart({ lines, onChangeQty, onRemove, total, embedded = false }) 
             style={{
               width: 72,
               padding: 8,
-              borderRadius: 8,
+              borderRadius: 0,
               border: "1px solid var(--border)",
               background: "var(--bg)",
               color: "var(--text)",

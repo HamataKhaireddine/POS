@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 
 const inp = {
   padding: 12,
-  borderRadius: 10,
+  borderRadius: 0,
   border: "1px solid var(--border)",
   background: "var(--bg)",
   color: "var(--text)",
@@ -133,8 +134,10 @@ export default function Customers() {
             <tr style={{ color: "var(--muted)", textAlign: "start" }}>
               <th style={th}>{t("customers.name")}</th>
               <th style={th}>{t("customers.phone")}</th>
+              <th style={th}>{t("customers.colBalance")}</th>
               <th style={th}>{t("customers.email")}</th>
               <th style={th}>{t("customers.notes")}</th>
+              <th style={th}>{t("customers.receivable")}</th>
               {isManager ? <th style={th} /> : null}
             </tr>
           </thead>
@@ -156,6 +159,7 @@ export default function Customers() {
                       style={inp}
                     />
                   </td>
+                  <td style={td}>—</td>
                   <td style={td}>
                     <input
                       value={editing.email || ""}
@@ -170,23 +174,32 @@ export default function Customers() {
                       style={inp}
                     />
                   </td>
-                  <td style={td}>
-                    <form onSubmit={saveEdit} style={{ display: "flex", gap: 6 }}>
-                      <button type="submit" className="btn-touch" style={{ background: "var(--accent)", color: "#fff" }}>
-                        {t("common.save")}
-                      </button>
-                      <button type="button" className="btn-touch" onClick={() => setEditing(null)}>
-                        {t("common.cancel")}
-                      </button>
-                    </form>
-                  </td>
+                  <td style={td}>—</td>
+                  {isManager ? (
+                    <td style={td}>
+                      <form onSubmit={saveEdit} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button type="submit" className="btn-touch" style={{ background: "var(--accent)", color: "#fff" }}>
+                          {t("common.save")}
+                        </button>
+                        <button type="button" className="btn-touch" onClick={() => setEditing(null)}>
+                          {t("common.cancel")}
+                        </button>
+                      </form>
+                    </td>
+                  ) : null}
                 </tr>
               ) : (
                 <tr key={c.id}>
                   <td style={td}>{c.name}</td>
                   <td style={td}>{c.phone || "—"}</td>
+                  <td style={td}>{Number(c.accountBalance ?? 0).toFixed(2)}</td>
                   <td style={td}>{c.email || "—"}</td>
                   <td style={td}>{c.notes || "—"}</td>
+                  <td style={td}>
+                    <Link to={`/customer-accounts/${c.id}`} style={{ fontSize: 13 }}>
+                      {t("receivable.open")}
+                    </Link>
+                  </td>
                   {isManager ? (
                     <td style={td}>
                       <button type="button" className="btn-touch" onClick={() => setEditing({ ...c })}>

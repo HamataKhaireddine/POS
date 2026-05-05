@@ -3,12 +3,25 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+const ORG_ID = "seed-org-default";
+
 async function main() {
+  await prisma.organization.upsert({
+    where: { id: ORG_ID },
+    update: { name: "المتجر الافتراضي", slug: "ezoo" },
+    create: {
+      id: ORG_ID,
+      name: "المتجر الافتراضي",
+      slug: "ezoo",
+    },
+  });
+
   const mainBranch = await prisma.branch.upsert({
     where: { id: "seed-branch-main" },
-    update: { nameEn: "Main branch" },
+    update: { organizationId: ORG_ID, nameEn: "Main branch" },
     create: {
       id: "seed-branch-main",
+      organizationId: ORG_ID,
       name: "الفرع الرئيسي",
       nameEn: "Main branch",
       address: "المتجر — العنوان",
@@ -17,9 +30,10 @@ async function main() {
 
   const north = await prisma.branch.upsert({
     where: { id: "seed-branch-north" },
-    update: { nameEn: "North branch" },
+    update: { organizationId: ORG_ID, nameEn: "North branch" },
     create: {
       id: "seed-branch-north",
+      organizationId: ORG_ID,
       name: "فرع الشمال",
       nameEn: "North branch",
       address: "",
@@ -28,9 +42,15 @@ async function main() {
 
   const hash = await bcrypt.hash("admin123", 10);
   await prisma.user.upsert({
-    where: { email: "admin@petstore.local" },
+    where: {
+      organizationId_email: {
+        organizationId: ORG_ID,
+        email: "admin@petstore.local",
+      },
+    },
     update: { nameEn: "System administrator" },
     create: {
+      organizationId: ORG_ID,
       email: "admin@petstore.local",
       passwordHash: hash,
       name: "مدير النظام",
@@ -40,11 +60,37 @@ async function main() {
     },
   });
 
+  const platformHash = await bcrypt.hash("platform123", 10);
+  await prisma.user.upsert({
+    where: {
+      organizationId_email: {
+        organizationId: ORG_ID,
+        email: "platform@petstore.local",
+      },
+    },
+    update: { nameEn: "Platform administrator" },
+    create: {
+      organizationId: ORG_ID,
+      email: "platform@petstore.local",
+      passwordHash: platformHash,
+      name: "مدير المنصة",
+      nameEn: "Platform administrator",
+      role: "ADMIN",
+      branchId: mainBranch.id,
+    },
+  });
+
   const cashierHash = await bcrypt.hash("cashier123", 10);
   await prisma.user.upsert({
-    where: { email: "cashier@petstore.local" },
+    where: {
+      organizationId_email: {
+        organizationId: ORG_ID,
+        email: "cashier@petstore.local",
+      },
+    },
     update: { nameEn: "Cashier" },
     create: {
+      organizationId: ORG_ID,
       email: "cashier@petstore.local",
       passwordHash: cashierHash,
       name: "كاشير",
@@ -81,10 +127,11 @@ async function main() {
     },
   ];
 
-  if ((await prisma.product.count()) === 0) {
+  if ((await prisma.product.count({ where: { organizationId: ORG_ID } })) === 0) {
     for (const s of samples) {
       const p = await prisma.product.create({
         data: {
+          organizationId: ORG_ID,
           name: s.name,
           nameEn: s.nameEn,
           petType: s.petType,
@@ -125,16 +172,20 @@ async function main() {
 
   for (const s of samples) {
     await prisma.product.updateMany({
-      where: { name: s.name },
+      where: { organizationId: ORG_ID, name: s.name },
       data: { nameEn: s.nameEn },
     });
   }
 
-  if (!(await prisma.syncSettings.findFirst())) {
-    await prisma.syncSettings.create({ data: {} });
-  }
+  await prisma.syncSettings.upsert({
+    where: { organizationId: ORG_ID },
+    update: {},
+    create: { organizationId: ORG_ID },
+  });
 
-  console.log("تم البذر: admin@petstore.local / admin123 ، cashier@petstore.local / cashier123");
+  console.log(
+    "تم البذر: admin@petstore.local / admin123 | platform@petstore.local / platform123 (مدير المنصة) | cashier@petstore.local / cashier123"
+  );
 }
 
 main()

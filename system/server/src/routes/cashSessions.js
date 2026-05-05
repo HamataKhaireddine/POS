@@ -15,7 +15,11 @@ router.get("/open", async (req, res) => {
     return res.status(403).json({ error: "غير مصرح" });
   }
   const session = await prisma.cashSession.findFirst({
-    where: { branchId: String(branchId), closedAt: null },
+    where: {
+      branchId: String(branchId),
+      closedAt: null,
+      branch: { organizationId: req.user.organizationId },
+    },
     include: {
       openedBy: { select: { id: true, name: true } },
       branch: { select: { name: true } },
@@ -32,7 +36,11 @@ router.post("/open", requireRole("ADMIN", "MANAGER"), async (req, res) => {
     return res.status(403).json({ error: "لا يمكن فتح صندوق لفرع آخر" });
   }
   const existing = await prisma.cashSession.findFirst({
-    where: { branchId: bid, closedAt: null },
+    where: {
+      branchId: bid,
+      closedAt: null,
+      branch: { organizationId: req.user.organizationId },
+    },
   });
   if (existing) {
     return res.status(400).json({ error: "يوجد جلسة مفتوحة لهذا الفرع" });
@@ -69,8 +77,11 @@ router.post("/:id/close", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   if (Number.isNaN(counted) || counted < 0) {
     return res.status(400).json({ error: "المبلغ المعدود غير صالح" });
   }
-  const session = await prisma.cashSession.findUnique({
-    where: { id: req.params.id },
+  const session = await prisma.cashSession.findFirst({
+    where: {
+      id: req.params.id,
+      branch: { organizationId: req.user.organizationId },
+    },
   });
   if (!session || session.closedAt) {
     return res.status(400).json({ error: "الجلسة غير موجودة أو مُغلقة" });
@@ -128,7 +139,9 @@ router.post("/:id/close", requireRole("ADMIN", "MANAGER"), async (req, res) => {
 
 router.get("/", async (req, res) => {
   const { branchId, limit = "30" } = req.query;
-  const where = {};
+  const where = {
+    branch: { organizationId: req.user.organizationId },
+  };
   if (req.user.role !== "ADMIN") {
     if (!req.user.branchId) return res.json([]);
     where.branchId = req.user.branchId;

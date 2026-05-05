@@ -14,7 +14,7 @@
   --border: rgba(255, 255, 255, 0.1);
   --chart-grid: #334155;
   --login-gradient: radial-gradient(circle at top, #1e3a5f, var(--bg));
-  --radius: 14px;
+  --radius: 0;
   --touch: 48px;
   /* أزرار POS / تفاعلية — تباين أوضح في الليل */
   --pay-btn-bg: #1a2436;
@@ -144,6 +144,28 @@ html:not([data-theme="light"]) button.btn-touch[style*="surface2"]:not(:disabled
   outline-offset: 2px;
 }
 
+.product-card-pos__title {
+  font-weight: 800;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.product-card-pos:not(.product-card-pos--compact) .product-card-pos__title {
+  font-size: 15px;
+  -webkit-line-clamp: 3;
+}
+
+.product-card-pos--compact.card {
+  padding: 0.45rem 0.5rem;
+}
+
+.product-card-pos--compact .product-card-pos__title {
+  font-size: 12px;
+  -webkit-line-clamp: 2;
+}
+
 /* هيكل التطبيق: سايدبار + محتوى */
 .app-layout-shell {
   display: flex;
@@ -232,6 +254,88 @@ html:not([data-theme="light"]) button.btn-touch[style*="surface2"]:not(:disabled
   gap: 4px;
 }
 
+.app-sidebar-nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.app-sidebar-nav-section:first-of-type {
+  margin-top: 0;
+}
+
+.app-sidebar-nav-heading {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 8px 14px 4px;
+  line-height: 1.2;
+}
+
+button.app-sidebar-nav-heading--toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius, 0);
+  background: var(--surface2);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: start;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+button.app-sidebar-nav-heading--toggle:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+button.app-sidebar-nav-heading--toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.app-sidebar-nav-chevron {
+  flex-shrink: 0;
+  font-size: 10px;
+  opacity: 0.85;
+  transition: transform 0.18s ease;
+}
+
+button.app-sidebar-nav-heading--toggle[aria-expanded="true"] .app-sidebar-nav-chevron {
+  transform: rotate(0deg);
+}
+
+button.app-sidebar-nav-heading--toggle[aria-expanded="false"] .app-sidebar-nav-chevron {
+  transform: rotate(-90deg);
+}
+
+[dir="rtl"] button.app-sidebar-nav-heading--toggle[aria-expanded="false"] .app-sidebar-nav-chevron {
+  transform: rotate(90deg);
+}
+
+.app-sidebar-nav-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 4px;
+}
+
+.app-sidebar-nav-panel[hidden] {
+  display: none !important;
+}
+
 .app-main-wrap {
   flex: 1;
   min-width: 0;
@@ -258,6 +362,13 @@ html:not([data-theme="light"]) button.btn-touch[style*="surface2"]:not(:disabled
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
+}
+
+/* نقطة البيع: عرض كامل للشبكة والمنتجات */
+.app-main-content--pos-wide {
+  max-width: none;
+  margin: 0;
+  padding: 12px clamp(8px, 1.2vw, 20px) 16px;
 }
 
 @media (max-width: 768px) {
@@ -287,6 +398,31 @@ html:not([data-theme="light"]) button.btn-touch[style*="surface2"]:not(:disabled
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 0.85rem;
+}
+
+/* POS: 5 أعمدة على الشاشات العريضة — يتجاوز القواعد العامة */
+.grid-products.grid-products--pos {
+  width: 100%;
+  gap: 0.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 640px) {
+  .grid-products.grid-products--pos {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .grid-products.grid-products--pos {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .grid-products.grid-products--pos {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
 }
 
 /* صفحة POS: إبقاء زر الدفع والإجمالي ضمن الشاشة */
@@ -346,7 +482,7 @@ html:not([data-theme="light"]) button.btn-touch[style*="surface2"]:not(:disabled
 .pos-cart-wrap__head:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: 0;
 }
 
 .pos-cart-wrap__body {
@@ -449,7 +585,7 @@ html:not([data-theme="light"]) button.btn-touch[style*="surface2"]:not(:disabled
   justify-content: center;
   gap: 6px;
   padding: 10px 8px;
-  border-radius: 12px;
+  border-radius: 0;
   border: 2px solid var(--pay-btn-border);
   background: var(--pay-btn-bg);
   color: var(--text);
@@ -506,7 +642,7 @@ html:not([data-theme="light"]) button.btn-touch[style*="surface2"]:not(:disabled
   max-width: none;
   min-width: 48px;
   padding: 6px 4px;
-  border-radius: 10px;
+  border-radius: 0;
 }
 
 .pos-pay-method-btn--compact .pos-pay-method-btn__icon {
@@ -522,7 +658,7 @@ html:not([data-theme="light"]) button.btn-touch[style*="surface2"]:not(:disabled
   min-height: 48px;
   padding: 10px 14px;
   margin-bottom: 12px;
-  border-radius: 12px;
+  border-radius: 0;
   border: 2px solid var(--split-btn-border);
   background: var(--split-btn-bg);
   color: var(--text);
@@ -569,7 +705,7 @@ html:not([data-theme="light"]) button.btn-touch[style*="surface2"]:not(:disabled
   font-size: 11px;
   font-weight: 800;
   padding: 3px 8px;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--split-hint-bg);
   color: var(--split-hint-text);
 }
@@ -680,16 +816,114 @@ html:not([data-theme="light"]) button.btn-touch[style*="surface2"]:not(:disabled
     visibility: hidden;
   }
   .print-invoice,
-  .print-invoice * {
+  .print-invoice *,
+  .dashboard-print-area,
+  .dashboard-print-area * {
     visibility: visible;
   }
+
   .print-invoice {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
-    width: 100% !important;
-    padding: 24px;
+    box-sizing: border-box;
     background: #fff !important;
     color: #111 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .dashboard-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box;
+    padding: 12px 16px 24px;
+    background: #fff !important;
+    color: #111 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .dashboard-print-hide {
+    display: none !important;
+  }
+
+  .dashboard-print-branch-filter {
+    display: none !important;
+  }
+
+  /* أحجام ورق الفاتورة (تجزئة / جملة) */
+  .print-invoice.print-paper--a4 {
+    width: 190mm !important;
+    max-width: 190mm !important;
+    min-height: auto;
+    padding: 10mm !important;
+  }
+  .print-invoice.print-paper--a5 {
+    width: 132mm !important;
+    max-width: 132mm !important;
+    padding: 8mm !important;
+  }
+  .print-invoice.print-paper--letter {
+    width: 7.5in !important;
+    max-width: 7.5in !important;
+    padding: 0.45in !important;
+  }
+  .print-invoice.print-paper--thermal80 {
+    width: 72mm !important;
+    max-width: 72mm !important;
+    padding: 2mm 3mm !important;
+    font-size: 10px !important;
+  }
+  .print-invoice.print-paper--thermal80 h2 {
+    font-size: 14px !important;
+  }
+  .print-invoice.print-paper--thermal80 table {
+    font-size: 9px !important;
+  }
+  .print-invoice.print-paper--thermal58 {
+    width: 48mm !important;
+    max-width: 48mm !important;
+    padding: 2mm !important;
+    font-size: 9px !important;
+  }
+  .print-invoice.print-paper--thermal58 h2 {
+    font-size: 12px !important;
+  }
+  .print-invoice.print-paper--thermal58 table {
+    font-size: 8px !important;
+  }
+
+  /* تقارير لوحة التحكم */
+  .dashboard-print-area.print-paper--a4 {
+    width: 190mm !important;
+    max-width: 190mm !important;
+    margin: 0 auto;
+  }
+  .dashboard-print-area.print-paper--a5 {
+    width: 132mm !important;
+    max-width: 132mm !important;
+    margin: 0 auto;
+  }
+  .dashboard-print-area.print-paper--letter {
+    width: 7.5in !important;
+    max-width: 7.5in !important;
+    margin: 0 auto;
+  }
+  .dashboard-print-area.print-paper--thermal80 {
+    width: 80mm !important;
+    max-width: 80mm !important;
+    font-size: 10px !important;
+  }
+  .dashboard-print-area.print-paper--thermal58 {
+    width: 58mm !important;
+    max-width: 58mm !important;
+    font-size: 9px !important;
+  }
+
+  .dashboard-print-area .recharts-responsive-container {
+    min-height: 200px !important;
   }
 }

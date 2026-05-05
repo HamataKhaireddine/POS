@@ -15,8 +15,11 @@ import { DashboardCard } from "../components/DashboardCard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { branchDisplayName } from "../utils/displayLabels.js";
+import { usePrintSettings } from "../context/PrintSettingsContext.jsx";
+import { printPaperClass } from "../utils/printPaper.js";
 
 export default function Dashboard() {
+  const { sizes } = usePrintSettings();
   const { user } = useAuth();
   const { t, locale } = useI18n();
   const [branches, setBranches] = useState([]);
@@ -53,18 +56,35 @@ export default function Dashboard() {
 
   const cur = (v) => `${Number(v).toFixed(2)} ${t("common.currency")}`;
 
+  const printReports = () => {
+    requestAnimationFrame(() => {
+      setTimeout(() => window.print(), 150);
+    });
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className={`dashboard-print-area ${printPaperClass(sizes.reports)}`}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
         <h1 style={{ margin: 0 }}>{t("dashboard.title")}</h1>
+        <button
+          type="button"
+          className="btn-touch dashboard-print-hide"
+          onClick={printReports}
+          style={{ background: "var(--surface2)" }}
+          title={t("dashboard.printHint")}
+        >
+          {t("dashboard.print")}
+        </button>
         {user?.role === "ADMIN" ? (
           <select
             value={branchId}
             onChange={(e) => setBranchId(e.target.value)}
+            className="dashboard-print-branch-filter"
             style={{
               minHeight: 44,
               padding: "8px 12px",
-              borderRadius: 10,
+              borderRadius: 0,
               background: "var(--surface)",
               color: "var(--text)",
               border: "1px solid var(--border)",
@@ -95,6 +115,12 @@ export default function Dashboard() {
             accent="var(--success)"
           />
           <DashboardCard title={t("dashboard.monthTotal")} value={cur(summary.salesMonthTotal)} />
+          <DashboardCard
+            title={t("dashboard.wholesaleMonth")}
+            value={cur(summary.wholesaleMonthTotal ?? 0)}
+            hint={t("dashboard.wholesaleMonthHint")}
+            accent="var(--accent2)"
+          />
           <DashboardCard
             title={t("dashboard.profitMonth")}
             value={`${summary.estimatedProfitMonth} ${t("common.currency")}`}
@@ -129,12 +155,12 @@ export default function Dashboard() {
                 contentStyle={{
                   background: "var(--surface)",
                   border: "1px solid var(--border)",
-                  borderRadius: 8,
+                  borderRadius: 0,
                   color: "var(--text)",
                 }}
                 formatter={(v) => [cur(v), t("dashboard.tooltipSales")]}
               />
-              <Bar dataKey="value" fill="var(--accent)" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="value" fill="var(--accent)" radius={[0, 0, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -151,12 +177,12 @@ export default function Dashboard() {
                   contentStyle={{
                     background: "var(--surface)",
                     border: "1px solid var(--border)",
-                    borderRadius: 8,
+                    borderRadius: 0,
                     color: "var(--text)",
                   }}
                   formatter={(v) => [cur(v), t("dashboard.tooltipSales")]}
                 />
-                <Bar dataKey="value" fill="var(--accent2)" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="value" fill="var(--accent2)" radius={[0, 0, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -173,7 +199,7 @@ export default function Dashboard() {
                 contentStyle={{
                   background: "var(--surface)",
                   border: "1px solid var(--border)",
-                  borderRadius: 8,
+                  borderRadius: 0,
                   color: "var(--text)",
                 }}
                 formatter={(v) => [cur(v), t("dashboard.tooltipProfit")]}
@@ -183,6 +209,7 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
       </div>
+    </div>
     </div>
   );
 }

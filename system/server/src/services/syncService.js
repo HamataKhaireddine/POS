@@ -8,10 +8,12 @@ import { Prisma } from "../lib/prisma-client-bundle.js";
 import { prisma } from "../lib/prisma.js";
 import { decryptSecret, encryptSecret } from "../lib/secretCrypto.js";
 
-export async function getSyncConfig() {
-  let row = await prisma.syncSettings.findFirst();
+export async function getSyncConfig(organizationId) {
+  let row = await prisma.syncSettings.findUnique({
+    where: { organizationId },
+  });
   if (!row) {
-    row = await prisma.syncSettings.create({ data: {} });
+    row = await prisma.syncSettings.create({ data: { organizationId } });
   }
   return row;
 }
@@ -26,8 +28,14 @@ export function getPlainSyncApiKey(row) {
   }
 }
 
-export async function saveSyncConfig({ websiteBaseUrl, apiKey }) {
-  const existing = await prisma.syncSettings.findFirst();
+export async function saveSyncConfig(organizationId, {
+  websiteBaseUrl,
+  apiKey,
+  inventoryWebhookUrl,
+}) {
+  const existing = await prisma.syncSettings.findUnique({
+    where: { organizationId },
+  });
   let storedKey;
   if (apiKey !== undefined) {
     const t = apiKey?.trim();
@@ -35,19 +43,24 @@ export async function saveSyncConfig({ websiteBaseUrl, apiKey }) {
   }
   if (existing) {
     return prisma.syncSettings.update({
-      where: { id: existing.id },
+      where: { organizationId },
       data: {
         ...(websiteBaseUrl !== undefined && {
           websiteBaseUrl: websiteBaseUrl?.trim() || null,
         }),
         ...(apiKey !== undefined && { apiKey: storedKey }),
+        ...(inventoryWebhookUrl !== undefined && {
+          inventoryWebhookUrl: inventoryWebhookUrl?.trim() || null,
+        }),
       },
     });
   }
   return prisma.syncSettings.create({
     data: {
+      organizationId,
       websiteBaseUrl: websiteBaseUrl?.trim() || null,
       apiKey: storedKey ?? null,
+      inventoryWebhookUrl: inventoryWebhookUrl?.trim() || null,
     },
   });
 }
@@ -56,8 +69,8 @@ export async function saveSyncConfig({ websiteBaseUrl, apiKey }) {
  * سحب المنتجات من الموقع (مثال: GET /api/products)
  * عدّل المسار والتنسيق حسب API الموقع الفعلي
  */
-export async function syncProductsFromWebsite() {
-  const cfg = await getSyncConfig();
+export async function syncProductsFromWebsite(organizationId) {
+  const cfg = await getSyncConfig(organizationId);
   const key = getPlainSyncApiKey(cfg);
   if (!cfg.websiteBaseUrl || !key) {
     throw new Error("يجب حفظ عنوان الموقع و API Key أولاً");
@@ -70,7 +83,21 @@ export async function syncProductsFromWebsite() {
     },
   });
   if (!res.ok) {
-    throw new Error(`فشل جلب المنتجات: HTTP ${res.status}`);
+    let detail = "";
+    try {
+      detail = (await res.text()).trim().slice(0, 400);
+    } catch {
+      /* ignore */
+    }
+    const err = new Error(
+      res.status === 401
+        ? "الموقع رفض المفتاح (401). انسخ مفتاح API من زر «توليد» أو احفظ المفتاح يدوياً ثم ضع نفس القيمة بالضبط في متغير البيئة بالمتجر (مثل POS_SYNC_API_KEY) بدون مسافات إضافية، وأعد تشغيل خادم المتجر."
+        : res.status === 404
+          ? `المسار غير موجود (404): ${url} — تأكد أن خادم المتجر يعرض GET /api/products على هذا العنوان.`
+          : `فشل جلب المنتجات: HTTP ${res.status}${detail ? ` — ${detail}` : ""}`
+    );
+    err.statusCode = res.status;
+    throw err;
   }
   const data = await res.json();
   const list = Array.isArray(data) ? data : data.products || data.data || [];
@@ -79,7 +106,7 @@ export async function syncProductsFromWebsite() {
     const extId = String(item.id ?? item.externalId ?? "");
     if (!extId) continue;
     const existing = await prisma.product.findFirst({
-      where: { externalId: extId },
+      where: { organizationId, externalId: extId },
     });
     const priceDec = new Prisma.Decimal(String(item.price ?? "0"));
     const costDec =
@@ -120,12 +147,14 @@ export async function syncProductsFromWebsite() {
         },
       });
     } else {
-      await prisma.product.create({ data: base });
+      await prisma.product.create({
+        data: { ...base, organizationId },
+      });
     }
     upserted++;
   }
   await prisma.syncSettings.update({
-    where: { id: cfg.id },
+    where: { organizationId },
     data: { lastProductSyncAt: new Date() },
   });
   return { upserted, at: new Date().toISOString() };
@@ -182,8 +211,8 @@ function mapPetType(raw) {
 /**
  * دفع الطلبات المحلية للموقع أو سحب طلبات جديدة — حسب تصميم API لديك
  */
-export async function syncOrdersWithWebsite() {
-  const cfg = await getSyncConfig();
+export async function syncOrdersWithWebsite(organizationId) {
+  const cfg = await getSyncConfig(organizationId);
   const key = getPlainSyncApiKey(cfg);
   if (!cfg.websiteBaseUrl || !key) {
     throw new Error("يجب حفظ عنوان الموقع و API Key أولاً");
@@ -199,7 +228,7 @@ export async function syncOrdersWithWebsite() {
     throw new Error(`فشل مزامنة الطلبات: HTTP ${res.status}`);
   }
   await prisma.syncSettings.update({
-    where: { id: cfg.id },
+    where: { organizationId },
     data: { lastOrderSyncAt: new Date() },
   });
   return { message: "تم تسجيل وقت المزامنة (عدّل المنطق حسب API الموقع)", at: new Date().toISOString() };

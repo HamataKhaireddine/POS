@@ -18,7 +18,7 @@ function ezooImageUrl(item) {
  * جلب المنتجات من API تطبيق ezoo (ميني زو).
  * يتطلب nationality_id — الافتراضي 1 (قطر). اضبط EZOO_NATIONALITY_ID في server/.env إن لزم.
  */
-export async function syncProductsFromEzoo() {
+export async function syncProductsFromEzoo(organizationId) {
   const nationalityId = String(process.env.EZOO_NATIONALITY_ID ?? "1").trim() || "1";
   const endpoint = (process.env.EZOO_GET_PRODUCTS_URL || DEFAULT_EZOO_URL).trim();
   const u = new URL(endpoint);
@@ -78,7 +78,7 @@ export async function syncProductsFromEzoo() {
     };
 
     const existing = await prisma.product.findFirst({
-      where: { externalId: extId },
+      where: { organizationId, externalId: extId },
     });
 
     try {
@@ -94,7 +94,9 @@ export async function syncProductsFromEzoo() {
           },
         });
       } else {
-        await prisma.product.create({ data: base });
+        await prisma.product.create({
+          data: { ...base, organizationId },
+        });
       }
       upserted++;
     } catch (e) {
@@ -108,9 +110,9 @@ export async function syncProductsFromEzoo() {
     }
   }
 
-  const cfg = await getSyncConfig();
+  await getSyncConfig(organizationId);
   await prisma.syncSettings.update({
-    where: { id: cfg.id },
+    where: { organizationId },
     data: { lastProductSyncAt: new Date() },
   });
 

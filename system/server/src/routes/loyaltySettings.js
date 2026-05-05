@@ -1,0 +1,78 @@
+import { Router } from "express";
+import { prisma } from "../lib/prisma.js";
+import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { getOrCreateLoyaltySettings } from "../lib/loyalty.js";
+
+const router = Router();
+router.use(authMiddleware);
+
+router.get("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+  const row = await getOrCreateLoyaltySettings(prisma, req.user.organizationId);
+  res.json(row);
+});
+
+router.get("/ledger", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+  const take = Math.min(
+    500,
+    Math.max(1, parseInt(String(req.query.limit || "100"), 10) || 100)
+  );
+  const rows = await prisma.loyaltyLedger.findMany({
+    where: { organizationId: req.user.organizationId },
+    orderBy: { createdAt: "desc" },
+    take,
+    include: {
+      customer: { select: { id: true, name: true, phone: true } },
+      sale: { select: { id: true, total: true, createdAt: true } },
+    },
+  });
+  res.json(rows);
+});
+
+router.put("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+  const orgId = req.user.organizationId;
+  const b = req.body || {};
+  await getOrCreateLoyaltySettings(prisma, orgId);
+
+  const data = {};
+  const bool = (k) => {
+    if (b[k] === undefined) return;
+    data[k] = Boolean(b[k]);
+  };
+  const num = (k, min, max) => {
+    if (b[k] === undefined) return;
+    const n = Number(b[k]);
+    if (Number.isNaN(n)) return;
+    data[k] = min != null && max != null ? Math.min(max, Math.max(min, n)) : n;
+  };
+  const dec = (k) => {
+    if (b[k] === undefined) return;
+    const n = Number(b[k]);
+    if (Number.isNaN(n) || n < 0) return;
+    data[k] = n;
+  };
+
+  bool("enabled");
+  if (b.earnBase === "PER_ORDER_TOTAL" || b.earnBase === "LIFETIME_SPEND") {
+    data.earnBase = b.earnBase;
+  }
+  dec("earnEveryAmount");
+  num("earnPoints", 0, 1_000_000);
+  dec("minOrderForEarn");
+  bool("excludeWholesale");
+  if (b.awardTiming === "ON_PAYMENT" || b.awardTiming === "ON_DELIVERY") {
+    data.awardTiming = b.awardTiming;
+  }
+  bool("redemptionEnabled");
+  dec("redeemPointsPerCurrency");
+  num("maxRedemptionPercentOfInvoice", 0, 100);
+  bool("allowCouponWithPoints");
+  bool("guestPhoneRequired");
+
+  const row = await prisma.loyaltyProgramSettings.update({
+    where: { organizationId: orgId },
+    data,
+  });
+  res.json(row);
+});
+
+export default router;

@@ -11,6 +11,7 @@
  * @param {string} p.paymentMethod
  * @param {Array<{ method: string, amount: number }>|undefined} p.paymentSplits
  * @param {{ id: string, name: string, phone?: string } | null} p.customer
+ * @param {"RETAIL"|"WHOLESALE"} [p.saleChannel]
  */
 export function buildOfflineSalePreview(p) {
   const {
@@ -24,6 +25,7 @@ export function buildOfflineSalePreview(p) {
     paymentMethod,
     paymentSplits,
     customer,
+    saleChannel,
   } = p;
   const pm = paymentSplits ? "SPLIT" : String(paymentMethod || "CASH").toUpperCase();
   const items = cartItems.map((i) => {
@@ -51,6 +53,7 @@ export function buildOfflineSalePreview(p) {
     user: { name: cashierName },
     customer: customer || null,
     items,
+    channel: saleChannel === "WHOLESALE" ? "WHOLESALE" : "RETAIL",
     _offlinePending: true,
     _clientMutationId: clientMutationId,
   };

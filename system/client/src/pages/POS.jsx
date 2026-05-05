@@ -1,11 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client.js";
 import { ProductCard } from "../components/ProductCard.jsx";
 import { Cart } from "../components/Cart.jsx";
 import { InvoicePrint } from "../components/InvoicePrint.jsx";
 import {
+  PAYMENT_METHOD_IDS,
   PaymentMethodIconGroup,
   PaymentSectionHeading,
+  SPLIT_PAYMENT_METHOD_IDS,
   SplitPaymentToggle,
 } from "../components/PaymentMethodControls.jsx";
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner.js";
@@ -13,6 +15,7 @@ import { useCartStore } from "../store/cartStore.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useOffline } from "../context/OfflineContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
+import { usePrintSettings } from "../context/PrintSettingsContext.jsx";
 import {
   applyOfflineSaleToInventory,
   hydrateInventoryFromProducts,
@@ -26,12 +29,14 @@ import { enqueue } from "../offline/syncQueue.js";
 import { buildOfflineSalePreview } from "../offline/offlineSale.js";
 import { branchDisplayName } from "../utils/displayLabels.js";
 import { buildReceiptPlainText } from "../utils/receiptText.js";
+import { isUnitPriceAtOrBelowCost } from "../utils/saleCostWarning.js";
 
 function round2(n) {
   return Math.round(n * 100) / 100;
 }
 
 export default function POS() {
+  const { classFor } = usePrintSettings();
   const { user } = useAuth();
   const { refreshPending } = useOffline();
   const { t, locale } = useI18n();
@@ -58,8 +63,16 @@ export default function POS() {
   const [heldList, setHeldList] = useState([]);
   const [copyDone, setCopyDone] = useState(false);
   const [cartExpanded, setCartExpanded] = useState(false);
+  const [couponInput, setCouponInput] = useState("");
+  const [loyaltyPointsInput, setLoyaltyPointsInput] = useState("");
+  const [guestPhoneInput, setGuestPhoneInput] = useState("");
+  /** مبلغ يُدفع الآن عند البيع الجزئي بالآجل (يُترك فارغاً للدفع الكامل) */
+  const [payNowInput, setPayNowInput] = useState("");
 
   const items = useCartStore((s) => s.items);
+  const useWholesalePricing = useCartStore((s) => s.useWholesalePricing);
+  const setUseWholesalePricing = useCartStore((s) => s.setUseWholesalePricing);
+  const syncLinePricesFromProducts = useCartStore((s) => s.syncLinePricesFromProducts);
   const addProduct = useCartStore((s) => s.addProduct);
   const setQty = useCartStore((s) => s.setQuantity);
   const removeLine = useCartStore((s) => s.removeLine);
@@ -166,8 +179,44 @@ export default function POS() {
   }, [loadProducts]);
 
   useEffect(() => {
+    if (products.length > 0) syncLinePricesFromProducts(products);
+  }, [products, useWholesalePricing, syncLinePricesFromProducts]);
+
+  useEffect(() => {
     loadHeldCarts();
   }, [loadHeldCarts]);
+
+  /** أجهزة متعددة: القائمة لا تُحدَّث تلقائياً من السيرفر إلا عند إعادة الجلب — نحدّث عند العودة للتبويب + دورياً */
+  const lastSoftRefreshRef = useRef(0);
+  const softRefreshCatalog = useCallback(() => {
+    const now = Date.now();
+    if (now - lastSoftRefreshRef.current < 2500) return;
+    lastSoftRefreshRef.current = now;
+    loadProducts().catch(() => {});
+    loadHeldCarts().catch(() => {});
+  }, [loadProducts, loadHeldCarts]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      softRefreshCatalog();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", softRefreshCatalog);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", softRefreshCatalog);
+    };
+  }, [softRefreshCatalog]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      if (document.visibilityState !== "visible") return;
+      softRefreshCatalog();
+    }, 40000);
+    return () => clearInterval(id);
+  }, [softRefreshCatalog]);
 
   const onScan = useCallback(
     (code) => {
@@ -180,11 +229,32 @@ export default function POS() {
 
   useBarcodeScanner(onScan, true);
 
+  const selectedCustomer = useMemo(
+    () => customers.find((c) => c.id === customerId),
+    [customers, customerId]
+  );
+
+  const paymentMethodIds = useMemo(
+    () => (customerId ? PAYMENT_METHOD_IDS : PAYMENT_METHOD_IDS.filter((m) => m !== "ON_ACCOUNT")),
+    [customerId]
+  );
+
+  useEffect(() => {
+    if (!customerId && paymentMethod === "ON_ACCOUNT") {
+      setPaymentMethod("CASH");
+    }
+  }, [customerId, paymentMethod]);
+
   const branchName = useMemo(() => {
     const bid = branchId || user?.branchId;
     const b = branches.find((br) => br.id === bid);
     return branchDisplayName(b, locale);
   }, [branches, branchId, user?.branchId, locale]);
+
+  const hasBelowCostWarning = useMemo(
+    () => items.some((line) => isUnitPriceAtOrBelowCost(line.unitPrice, line.cost)),
+    [items]
+  );
 
   const fillRemainder = (idx) => {
     const due = amountDue;
@@ -216,6 +286,7 @@ export default function POS() {
           branchId: bid,
           label: holdLabel.trim() || undefined,
           items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+          useWholesalePricing,
           customerId: customerId || undefined,
           discountInput,
           taxPercent,
@@ -240,6 +311,7 @@ export default function POS() {
     const p = row.payload;
     if (!p?.items?.length) return;
     setMsg("");
+    setUseWholesalePricing(Boolean(p.useWholesalePricing));
     replaceAll(p.items);
     setCustomerId(typeof p.customerId === "string" ? p.customerId : "");
     setDiscountInput(p.discountInput != null ? String(p.discountInput) : "");
@@ -300,12 +372,26 @@ export default function POS() {
       customerId: customerId || undefined,
       discountAmount: discountNum > 0 ? discountNum : undefined,
       taxPercent: taxPctNum > 0 ? taxPctNum : undefined,
+      useWholesalePricing,
       items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
     };
+    const cTrim = couponInput.trim();
+    if (cTrim) body.couponCode = cTrim;
+    const lp = Math.max(0, Math.floor(Number.parseFloat(String(loyaltyPointsInput).replace(",", ".")) || 0));
+    if (lp > 0) body.loyaltyPointsToRedeem = lp;
+    const gp = guestPhoneInput.trim();
+    if (gp) body.guestPhone = gp;
     if (paymentSplits) {
       body.paymentSplits = paymentSplits;
     } else {
       body.paymentMethod = paymentMethod;
+      if (
+        !paymentSplits &&
+        ["CASH", "CARD", "ONLINE"].includes(paymentMethod) &&
+        payNowInput.trim() !== ""
+      ) {
+        body.amountPaid = round2(Number.parseFloat(String(payNowInput).replace(",", ".")) || 0);
+      }
     }
 
     const offline = typeof navigator !== "undefined" && !navigator.onLine;
@@ -354,6 +440,7 @@ export default function POS() {
           { method: "CARD", amount: "" },
         ]);
         setMsg(t("offline.savedLocal"));
+        setPayNowInput("");
         await refreshPending();
         await loadProducts();
         setTimeout(() => window.print(), 200);
@@ -382,8 +469,15 @@ export default function POS() {
         { method: "CASH", amount: "" },
         { method: "CARD", amount: "" },
       ]);
+      setCouponInput("");
+      setLoyaltyPointsInput("");
+      setGuestPhoneInput("");
+      setPayNowInput("");
       await loadProducts();
       await loadHeldCarts();
+      api("/api/customers")
+        .then(setCustomers)
+        .catch(() => {});
       setTimeout(() => window.print(), 200);
     } catch (e) {
       setMsg(e.message || t("pos.saleFailed"));
@@ -409,7 +503,7 @@ export default function POS() {
               minHeight: 44,
               minWidth: 180,
               padding: "8px 12px",
-              borderRadius: 10,
+              borderRadius: 0,
               background: "var(--surface)",
               color: "var(--text)",
               border: "1px solid var(--border)",
@@ -431,7 +525,7 @@ export default function POS() {
             minWidth: 200,
             minHeight: 44,
             padding: "0 12px",
-            borderRadius: 10,
+            borderRadius: 0,
             border: "1px solid var(--border)",
             background: "var(--bg)",
             color: "var(--text)",
@@ -443,7 +537,7 @@ export default function POS() {
           style={{
             minHeight: 44,
             padding: "8px 12px",
-            borderRadius: 10,
+            borderRadius: 0,
             background: "var(--surface)",
             color: "var(--text)",
             border: "1px solid var(--border)",
@@ -457,6 +551,21 @@ export default function POS() {
         <button type="button" className="btn-touch" onClick={() => loadProducts()} style={{ background: "var(--surface2)" }}>
           {t("pos.refresh")}
         </button>
+        <button
+          type="button"
+          className="btn-touch"
+          onClick={() => {
+            setUseWholesalePricing(!useWholesalePricing);
+          }}
+          style={{
+            background: useWholesalePricing ? "var(--accent2)" : "var(--surface2)",
+            color: useWholesalePricing ? "#fff" : "var(--text)",
+            border: useWholesalePricing ? "2px solid var(--accent2)" : "1px solid var(--border)",
+          }}
+          title={t("pos.wholesaleHint")}
+        >
+          {useWholesalePricing ? t("pos.wholesaleOn") : t("pos.wholesaleOff")}
+        </button>
       </div>
 
       <div
@@ -469,13 +578,19 @@ export default function POS() {
       >
         <style>{`
           @media (min-width: 960px) {
-            .pos-grid { grid-template-columns: 1.4fr 0.9fr !important; align-items: stretch !important; }
+            .pos-grid { grid-template-columns: minmax(0, 1fr) minmax(300px, 380px) !important; align-items: stretch !important; }
           }
         `}</style>
         <div className="pos-products-frame">
-          <div className="grid-products">
+          <div className="grid-products grid-products--pos">
             {products.map((p) => (
-              <ProductCard key={p.id} product={p} onAdd={(x) => addProduct(x, 1)} />
+              <ProductCard
+                key={p.id}
+                product={p}
+                compact
+                useWholesalePricing={useWholesalePricing}
+                onAdd={(x) => addProduct(x, 1)}
+              />
             ))}
           </div>
         </div>
@@ -509,6 +624,21 @@ export default function POS() {
                 {cartExpanded ? "−" : "+"} ({items.length})
               </span>
             </div>
+            {hasBelowCostWarning ? (
+              <div
+                role="status"
+                style={{
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--warning)",
+                  background: "color-mix(in srgb, var(--warning) 14%, transparent)",
+                  borderBottom: "1px solid color-mix(in srgb, var(--warning) 35%, transparent)",
+                }}
+              >
+                {t("pos.belowCostBanner")}
+              </div>
+            ) : null}
             <div className="pos-cart-wrap__body">
               <Cart
                 embedded
@@ -564,7 +694,7 @@ export default function POS() {
                 style={{
                   minHeight: 44,
                   padding: "0 12px",
-                  borderRadius: 10,
+                  borderRadius: 0,
                   border: "1px solid var(--border)",
                   background: "var(--bg)",
                   color: "var(--text)",
@@ -592,7 +722,7 @@ export default function POS() {
                 minHeight: 44,
                 marginBottom: 10,
                 padding: "8px 12px",
-                borderRadius: 10,
+                borderRadius: 0,
                 background: "var(--surface)",
                 color: "var(--text)",
                 border: "1px solid var(--border)",
@@ -616,7 +746,7 @@ export default function POS() {
                   minWidth: 140,
                   minHeight: 44,
                   padding: "0 12px",
-                  borderRadius: 10,
+                  borderRadius: 0,
                   border: "1px solid var(--border)",
                   background: "var(--bg)",
                   color: "var(--text)",
@@ -644,23 +774,122 @@ export default function POS() {
                 {t("pos.quickCustomerBtn")}
               </button>
             </div>
+            {selectedCustomer && typeof selectedCustomer.loyaltyPoints === "number" ? (
+              <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>
+                {t("pos.loyaltyBalance")}: <strong>{selectedCustomer.loyaltyPoints}</strong>
+              </div>
+            ) : null}
+            {selectedCustomer && selectedCustomer.accountBalance != null ? (
+              <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>
+                {t("receivable.balance")}:{" "}
+                <strong>{Number(selectedCustomer.accountBalance).toFixed(2)}</strong> {t("common.currency")}
+              </div>
+            ) : null}
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.guestPhone")}</span>
+              <input
+                value={guestPhoneInput}
+                onChange={(e) => setGuestPhoneInput(e.target.value)}
+                placeholder="05xxxxxxxx"
+                style={{
+                  minHeight: 44,
+                  padding: "0 12px",
+                  borderRadius: 0,
+                  border: "1px solid var(--border)",
+                  background: "var(--bg)",
+                  color: "var(--text)",
+                }}
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.couponCode")}</span>
+              <input
+                value={couponInput}
+                onChange={(e) => setCouponInput(e.target.value)}
+                style={{
+                  minHeight: 44,
+                  padding: "0 12px",
+                  borderRadius: 0,
+                  border: "1px solid var(--border)",
+                  background: "var(--bg)",
+                  color: "var(--text)",
+                }}
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.loyaltyRedeem")}</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={loyaltyPointsInput}
+                onChange={(e) => setLoyaltyPointsInput(e.target.value)}
+                placeholder="0"
+                style={{
+                  minHeight: 44,
+                  padding: "0 12px",
+                  borderRadius: 0,
+                  border: "1px solid var(--border)",
+                  background: "var(--bg)",
+                  color: "var(--text)",
+                }}
+              />
+            </label>
+            <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--muted)" }}>
+              {t("pos.loyaltyPreviewHint")}
+            </p>
             <PaymentSectionHeading t={t} />
             <SplitPaymentToggle
               enabled={splitEnabled}
               onChange={(v) => {
                 setSplitEnabled(v);
+                setPayNowInput("");
                 setMsg("");
               }}
               t={t}
             />
             {!splitEnabled ? (
-              <PaymentMethodIconGroup value={paymentMethod} onChange={setPaymentMethod} t={t} />
+              <>
+                <PaymentMethodIconGroup
+                  value={paymentMethod}
+                  onChange={(m) => {
+                    setPaymentMethod(m);
+                    setPayNowInput("");
+                    setMsg("");
+                  }}
+                  t={t}
+                  methodIds={paymentMethodIds}
+                />
+                {customerId && ["CASH", "CARD", "ONLINE"].includes(paymentMethod) ? (
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 10 }}>
+                    <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.payNowPartial")}</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={payNowInput}
+                      onChange={(e) => setPayNowInput(e.target.value)}
+                      placeholder={String(amountDue)}
+                      style={{
+                        minHeight: 44,
+                        padding: "0 12px",
+                        borderRadius: 0,
+                        border: "1px solid var(--border)",
+                        background: "var(--bg)",
+                        color: "var(--text)",
+                      }}
+                    />
+                    <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                      {t("pos.payNowHint", { total: amountDue.toFixed(2) })}
+                    </span>
+                  </label>
+                ) : null}
+              </>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
                 {splitRows.map((row, idx) => (
                   <div key={idx} className="pos-split-row">
                     <PaymentMethodIconGroup
                       compact
+                      methodIds={SPLIT_PAYMENT_METHOD_IDS}
                       value={row.method}
                       onChange={(m) => {
                         setSplitRows((rows) => rows.map((r, j) => (j === idx ? { ...r, method: m } : r)));
@@ -680,7 +909,7 @@ export default function POS() {
                         minHeight: 44,
                         minWidth: 100,
                         padding: "0 12px",
-                        borderRadius: 10,
+                        borderRadius: 0,
                         border: "1px solid var(--border)",
                         background: "var(--bg)",
                         color: "var(--text)",
@@ -720,7 +949,7 @@ export default function POS() {
                 style={{
                   minHeight: 44,
                   padding: "0 12px",
-                  borderRadius: 10,
+                  borderRadius: 0,
                   border: "1px solid var(--border)",
                   background: "var(--bg)",
                   color: "var(--text)",
@@ -751,7 +980,7 @@ export default function POS() {
                 style={{
                   minHeight: 44,
                   padding: "8px 12px",
-                  borderRadius: 10,
+                  borderRadius: 0,
                   background: "var(--surface)",
                   color: "var(--text)",
                   border: "1px solid var(--border)",
@@ -809,7 +1038,10 @@ export default function POS() {
         </div>
       </div>
 
-      <div className="print-invoice" style={{ position: "fixed", left: -99999, top: 0, width: 400 }}>
+      <div
+        className={`print-invoice ${classFor("retail")}`}
+        style={{ position: "fixed", left: -99999, top: 0, width: 400 }}
+      >
         <InvoicePrint sale={lastSale} branchName={branchName} />
       </div>
     </div>

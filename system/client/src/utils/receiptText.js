@@ -1,7 +1,21 @@
 import { productDisplayName } from "./productName.js";
 
-const PAY_AR = { CASH: "نقدي", CARD: "بطاقة", ONLINE: "أونلاين", SPLIT: "تقسيم" };
-const PAY_EN = { CASH: "Cash", CARD: "Card", ONLINE: "Online", SPLIT: "Split" };
+const PAY_AR = {
+  CASH: "نقدي",
+  CARD: "بطاقة",
+  ONLINE: "أونلاين",
+  SPLIT: "تقسيم",
+  ON_ACCOUNT: "على الحساب",
+  ON_DELIVERY: "عند الاستلام",
+};
+const PAY_EN = {
+  CASH: "Cash",
+  CARD: "Card",
+  ONLINE: "Online",
+  SPLIT: "Split",
+  ON_ACCOUNT: "On account",
+  ON_DELIVERY: "On delivery",
+};
 
 function payLabel(method, locale) {
   const m = String(method || "").toUpperCase();
@@ -22,6 +36,9 @@ export function buildReceiptPlainText(sale, branchName, locale) {
   lines.push(`${locale === "en" ? "Date" : "التاريخ"}: ${new Date(sale.createdAt).toLocaleString(loc)}`);
   lines.push(`${locale === "en" ? "Invoice #" : "رقم الفاتورة"}: ${sale.id}`);
   lines.push(`${locale === "en" ? "Cashier" : "الكاشير"}: ${sale.user?.name || "—"}`);
+  if (sale.channel === "WHOLESALE") {
+    lines.push(locale === "en" ? "Channel: Wholesale" : "القناة: بيع بالجملة");
+  }
   if (sale.paymentMethod === "SPLIT" && Array.isArray(sale.paymentSplits)) {
     lines.push(`${locale === "en" ? "Payment" : "الدفع"}:`);
     for (const row of sale.paymentSplits) {
@@ -52,5 +69,14 @@ export function buildReceiptPlainText(sale, branchName, locale) {
   const tax = Number(sale.taxAmount ?? 0);
   if (tax > 0) lines.push(`${locale === "en" ? "Tax" : "الضريبة"}: ${tax.toFixed(2)} ${cur}`);
   lines.push(`${locale === "en" ? "TOTAL" : "الإجمالي"}: ${Number(sale.total).toFixed(2)} ${cur}`);
+  const dueLine = Number(sale.amountDue ?? 0);
+  if (dueLine > 0.001) {
+    lines.push(
+      `${locale === "en" ? "Paid" : "المدفوع"}: ${Number(sale.amountPaid ?? sale.total).toFixed(2)} ${cur}`
+    );
+    lines.push(
+      `${locale === "en" ? "On account" : "متبقٍ على الحساب"}: ${dueLine.toFixed(2)} ${cur}`
+    );
+  }
   return lines.join("\n");
 }

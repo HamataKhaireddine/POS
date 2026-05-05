@@ -1,15 +1,17 @@
 import { Router } from "express";
 import { Prisma } from "../lib/prisma-client-bundle.js";
 import { prisma } from "../lib/prisma.js";
+import { findBranchInOrg } from "../lib/orgScope.js";
 import { authMiddleware, requireRole } from "../middleware/auth.js";
 import { writeAudit } from "../lib/auditLog.js";
+import { scheduleInventoryWebhook } from "../lib/inventoryWebhook.js";
 
 const router = Router();
 router.use(authMiddleware);
 
 router.get("/", async (req, res) => {
   const { branchId, limit = "50" } = req.query;
-  const where = {};
+  const where = { branch: { organizationId: req.user.organizationId } };
   const bid = branchId || (req.user.role === "ADMIN" ? undefined : req.user.branchId);
   if (bid) where.branchId = String(bid);
   const rows = await prisma.refund.findMany({
@@ -50,6 +52,9 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== bid) {
     return res.status(403).json({ error: "لا يمكن الإرجاع لفرع آخر" });
   }
+  const orgId = req.user.organizationId;
+  const branchOk = await findBranchInOrg(prisma, orgId, bid);
+  if (!branchOk) return res.status(400).json({ error: "فرع غير صالح" });
 
   const clientMutationId =
     clientMutationIdRaw != null && String(clientMutationIdRaw).trim()
@@ -57,8 +62,11 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
       : null;
 
   if (clientMutationId) {
-    const existing = await prisma.refund.findUnique({
-      where: { clientMutationId },
+    const existing = await prisma.refund.findFirst({
+      where: {
+        clientMutationId,
+        branch: { organizationId: orgId },
+      },
       include: refundInclude,
     });
     if (existing) {
@@ -71,7 +79,9 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
 
   let saleRef = null;
   if (saleId != null && String(saleId).trim()) {
-    saleRef = await prisma.sale.findUnique({ where: { id: String(saleId) } });
+    saleRef = await prisma.sale.findFirst({
+      where: { id: String(saleId), branch: { organizationId: orgId } },
+    });
     if (!saleRef) return res.status(400).json({ error: "فاتورة غير موجودة" });
     if (saleRef.branchId !== bid) return res.status(400).json({ error: "الفاتورة من فرع آخر" });
   }
@@ -83,7 +93,9 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
     for (const line of items) {
       const productId = line.productId;
       const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
-      const product = await prisma.product.findUnique({ where: { id: productId } });
+      const product = await prisma.product.findFirst({
+        where: { id: productId, organizationId: orgId },
+      });
       if (!product) throw new Error(`منتج غير موجود: ${productId}`);
       const unitPrice = product.price;
       const subtotal = unitPrice.mul(qty);
@@ -141,6 +153,16 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
       meta: { lines: refund.items?.length },
     });
 
+    scheduleInventoryWebhook(orgId, {
+      event: "refund.created",
+      meta: { refundId: refund.id, branchId: bid },
+      lines: lineData.map((l) => ({
+        branchId: bid,
+        productId: l.productId,
+        quantityDelta: l.quantity,
+      })),
+    });
+
     res.status(201).json(refund);
   } catch (e) {
     if (
@@ -148,8 +170,11 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
       e instanceof Prisma.PrismaClientKnownRequestError &&
       e.code === "P2002"
     ) {
-      const replay = await prisma.refund.findUnique({
-        where: { clientMutationId },
+      const replay = await prisma.refund.findFirst({
+        where: {
+          clientMutationId,
+          branch: { organizationId: req.user.organizationId },
+        },
         include: refundInclude,
       });
       if (replay) {

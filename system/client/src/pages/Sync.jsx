@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client.js";
+import {
+  getStoredSyncApiKey,
+  setStoredSyncApiKey,
+  clearStoredSyncApiKey,
+} from "../lib/syncApiKeySession.js";
 import { useI18n } from "../context/LanguageContext.jsx";
 
 export default function Sync() {
@@ -7,32 +12,86 @@ export default function Sync() {
   const [settings, setSettings] = useState(null);
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [inventoryWebhookUrl, setInventoryWebhookUrl] = useState("");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [generatedKey, setGeneratedKey] = useState("");
+  const [copyHint, setCopyHint] = useState("");
 
   const loc = locale === "en" ? "en-US" : "ar-SA";
+
+  const applyCachedApiKeyToFields = () => {
+    const cached = getStoredSyncApiKey();
+    if (cached) {
+      setApiKey(cached);
+      setGeneratedKey(cached);
+    } else {
+      setApiKey("");
+      setGeneratedKey("");
+    }
+  };
 
   const load = async () => {
     const s = await api("/api/sync/settings");
     setSettings(s);
     setBaseUrl(s.websiteBaseUrl || "");
-    setApiKey("");
+    setInventoryWebhookUrl(s.inventoryWebhookUrl || "");
+    applyCachedApiKeyToFields();
   };
 
   useEffect(() => {
     load().catch(() => {});
   }, []);
 
+  const generateApiKey = async () => {
+    if (!confirm(t("sync.generateApiKeyConfirm"))) return;
+    setLoading(true);
+    setMsg("");
+    setCopyHint("");
+    try {
+      const r = await api("/api/sync/generate-api-key", { method: "POST" });
+      const plain = r.apiKey || "";
+      setStoredSyncApiKey(plain);
+      setGeneratedKey(plain);
+      setApiKey(plain);
+      setSettings((prev) =>
+        prev ? { ...prev, apiKeySet: true } : { apiKeySet: true }
+      );
+      setMsg("");
+    } catch (x) {
+      setMsg(x.message || t("sync.saveFailed"));
+      setGeneratedKey("");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyGeneratedKey = async () => {
+    const text = generatedKey || apiKey;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyHint(t("sync.copied"));
+      setTimeout(() => setCopyHint(""), 2000);
+    } catch {
+      setCopyHint("");
+    }
+  };
+
   const save = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMsg("");
     try {
-      const body = { websiteBaseUrl: baseUrl };
+      const body = {
+        websiteBaseUrl: baseUrl,
+        inventoryWebhookUrl: inventoryWebhookUrl.trim() || null,
+      };
       if (apiKey.trim()) body.apiKey = apiKey.trim();
       const s = await api("/api/sync/settings", { method: "PUT", body });
       setSettings(s);
-      setApiKey("");
+      if (body.apiKey) setStoredSyncApiKey(body.apiKey);
+      applyCachedApiKeyToFields();
       setMsg(t("sync.saved"));
     } catch (x) {
       setMsg(x.message || t("sync.saveFailed"));
@@ -141,13 +200,66 @@ export default function Sync() {
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
           <span>{t("sync.apiKey")}</span>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("sync.apiKeySessionHint")}</span>
           <input
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             type="password"
-            placeholder={settings?.apiKeySet ? "••••••••" : ""}
+            placeholder={settings?.apiKeySet && !apiKey ? "••••••••" : ""}
+            autoComplete="off"
             style={inp}
           />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 8 }}>
+            <button
+              type="button"
+              disabled={loading}
+              className="btn-touch"
+              onClick={generateApiKey}
+              style={{ background: "var(--surface2)", color: "var(--text)" }}
+            >
+              {t("sync.generateApiKey")}
+            </button>
+          </div>
+          {apiKey || generatedKey ? (
+            <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("sync.generateApiKeyDone")}</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "stretch" }}>
+                <input readOnly value={generatedKey || apiKey} style={{ ...inp, flex: "1 1 240px", fontFamily: "monospace", fontSize: 13 }} />
+                <button
+                  type="button"
+                  className="btn-touch"
+                  onClick={copyGeneratedKey}
+                  style={{ background: "var(--accent)", color: "#fff" }}
+                >
+                  {copyHint || t("sync.copyApiKey")}
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {apiKey || generatedKey ? (
+            <button
+              type="button"
+              className="btn-touch"
+              onClick={() => {
+                clearStoredSyncApiKey();
+                setApiKey("");
+                setGeneratedKey("");
+              }}
+              style={{ marginTop: 8, background: "transparent", color: "var(--muted)", fontSize: 13 }}
+            >
+              {t("sync.clearApiKeySession")}
+            </button>
+          ) : null}
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+          <span>{t("sync.inventoryWebhookUrl")}</span>
+          <input
+            value={inventoryWebhookUrl}
+            onChange={(e) => setInventoryWebhookUrl(e.target.value)}
+            placeholder="https://your-site.com/api/pos/inventory-webhook"
+            style={inp}
+          />
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("sync.inventoryWebhookHint")}</span>
         </label>
         {settings ? (
           <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>
@@ -212,7 +324,7 @@ export default function Sync() {
 
 const inp = {
   padding: 12,
-  borderRadius: 10,
+  borderRadius: 0,
   border: "1px solid var(--border)",
   background: "var(--bg)",
   color: "var(--text)",

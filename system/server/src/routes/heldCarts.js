@@ -3,13 +3,14 @@ import { Prisma } from "../lib/prisma-client-bundle.js";
 import { prisma } from "../lib/prisma.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { writeAudit } from "../lib/auditLog.js";
+import { unitPriceDecimalForSale } from "../lib/productPricing.js";
 
 const router = Router();
 router.use(authMiddleware);
 
 const MAX_HELD_PER_USER_BRANCH = 15;
 
-async function normalizeCartPayload(db, branchId, rawItems) {
+async function normalizeCartPayload(db, organizationId, branchId, rawItems, useWholesale = false) {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     throw new Error("السلة فارغة");
   }
@@ -17,8 +18,8 @@ async function normalizeCartPayload(db, branchId, rawItems) {
   for (const line of rawItems) {
     const productId = line?.productId;
     if (!productId) continue;
-    const product = await db.product.findUnique({
-      where: { id: String(productId) },
+    const product = await db.product.findFirst({
+      where: { id: String(productId), organizationId },
       include: { inventories: { where: { branchId: String(branchId) } } },
     });
     if (!product) continue;
@@ -27,12 +28,13 @@ async function normalizeCartPayload(db, branchId, rawItems) {
     const want = Math.max(1, Math.floor(Number(line.quantity) || 1));
     const qty = Math.min(want, stock);
     if (qty < 1) continue;
+    const unitDec = unitPriceDecimalForSale(product, useWholesale);
     out.push({
       productId: product.id,
       name: product.name,
       nameEn: product.nameEn,
       imageUrl: product.imageUrl,
-      unitPrice: Number(product.price),
+      unitPrice: Number(unitDec),
       quantity: qty,
       maxStock: stock,
     });
@@ -49,7 +51,10 @@ router.get("/", async (req, res) => {
   if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== String(bid)) {
     return res.status(403).json({ error: "غير مصرح" });
   }
-  const where = { branchId: String(bid) };
+  const where = {
+    branchId: String(bid),
+    branch: { organizationId: req.user.organizationId },
+  };
   if (req.user.role === "CASHIER") {
     where.userId = req.user.sub;
   }
@@ -70,7 +75,9 @@ router.post("/", async (req, res) => {
     customerId,
     discountInput,
     taxPercent,
+    useWholesalePricing: useWholesaleRaw,
   } = req.body || {};
+  const useWholesalePricing = Boolean(useWholesaleRaw);
   const bid = bodyBranch || req.user.branchId;
   if (!bid) return res.status(400).json({ error: "يجب اختيار الفرع" });
   if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== String(bid)) {
@@ -87,9 +94,16 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const { items, subtotal } = await normalizeCartPayload(prisma, bid, rawItems);
+    const { items, subtotal } = await normalizeCartPayload(
+      prisma,
+      req.user.organizationId,
+      bid,
+      rawItems,
+      useWholesalePricing
+    );
     const payload = {
       items,
+      useWholesalePricing,
       customerId:
         customerId != null && String(customerId).trim() ? String(customerId).trim() : "",
       discountInput: discountInput != null ? String(discountInput) : "",
@@ -124,7 +138,12 @@ router.post("/", async (req, res) => {
 });
 
 router.delete("/:id", async (req, res) => {
-  const row = await prisma.heldCart.findUnique({ where: { id: req.params.id } });
+  const row = await prisma.heldCart.findFirst({
+    where: {
+      id: req.params.id,
+      branch: { organizationId: req.user.organizationId },
+    },
+  });
   if (!row) return res.status(404).json({ error: "غير موجود" });
   if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== row.branchId) {
     return res.status(403).json({ error: "غير مصرح" });

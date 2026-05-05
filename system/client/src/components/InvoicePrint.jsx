@@ -2,7 +2,14 @@ import React from "react";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { productDisplayName } from "../utils/productName.js";
 
-const PAY_KEYS = { CASH: "payment.cash", CARD: "payment.card", ONLINE: "payment.online", SPLIT: "payment.split" };
+const PAY_KEYS = {
+  CASH: "payment.cash",
+  CARD: "payment.card",
+  ONLINE: "payment.online",
+  SPLIT: "payment.split",
+  ON_ACCOUNT: "payment.onAccount",
+  ON_DELIVERY: "payment.onDelivery",
+};
 
 /**
  * محتوى قابل للطباعة — يُعرض في نافذة الطباعة (window.print)
@@ -37,6 +44,9 @@ export function InvoicePrint({ sale, branchName }) {
         <div>
           {t("invoice.cashier")} {sale.user?.name || "—"}
         </div>
+        {sale.channel === "WHOLESALE" ? (
+          <div style={{ fontWeight: 700, color: "#6d28d9" }}>{t("invoice.saleChannelWholesale")}</div>
+        ) : null}
         {splits ? (
           <div>
             <div>{t("invoice.payment")}</div>
@@ -100,6 +110,16 @@ export function InvoicePrint({ sale, branchName }) {
       <div style={{ marginTop: 16, fontWeight: 800, fontSize: 16 }}>
         {t("invoice.total")} {Number(sale.total).toFixed(2)} {t("common.currency")}
       </div>
+      {Number(sale.amountDue ?? 0) > 0.001 ? (
+        <div style={{ marginTop: 10, fontSize: 14 }}>
+          <div>
+            {t("invoice.amountPaid")}: {Number(sale.amountPaid ?? sale.total).toFixed(2)} {t("common.currency")}
+          </div>
+          <div style={{ fontWeight: 700 }}>
+            {t("invoice.amountDueLine")}: {Number(sale.amountDue).toFixed(2)} {t("common.currency")}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

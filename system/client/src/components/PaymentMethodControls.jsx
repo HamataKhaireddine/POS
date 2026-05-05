@@ -1,6 +1,9 @@
 import React from "react";
 
-export const PAYMENT_METHOD_IDS = ["CASH", "CARD", "ONLINE"];
+export const PAYMENT_METHOD_IDS = ["CASH", "CARD", "ONLINE", "ON_ACCOUNT", "ON_DELIVERY"];
+
+/** تقسيم الدفع: بدون «عند الاستلام» */
+export const SPLIT_PAYMENT_METHOD_IDS = ["CASH", "CARD", "ONLINE"];
 
 function IconCash({ className }) {
   return (
@@ -31,6 +34,17 @@ function IconOnline({ className }) {
   );
 }
 
+function IconDelivery({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 7h11v10H3z" />
+      <path d="M14 10h4l3 3v4h-7V10z" />
+      <circle cx="7.5" cy="19" r="1.5" />
+      <circle cx="17.5" cy="19" r="1.5" />
+    </svg>
+  );
+}
+
 function IconSplit({ className }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
@@ -55,21 +69,31 @@ const METHOD_ICONS = {
   CASH: IconCash,
   CARD: IconCardPay,
   ONLINE: IconOnline,
+  ON_ACCOUNT: IconWallet,
+  ON_DELIVERY: IconDelivery,
 };
 
 const METHOD_LABEL_KEYS = {
   CASH: "payment.cash",
   CARD: "payment.card",
   ONLINE: "payment.online",
+  ON_ACCOUNT: "payment.onAccount",
+  ON_DELIVERY: "payment.onDelivery",
 };
 
 /**
  * أزرار أيقونات: نقدي / بطاقة / أونلاين
  */
-export function PaymentMethodIconGroup({ value, onChange, t, compact = false }) {
+export function PaymentMethodIconGroup({
+  value,
+  onChange,
+  t,
+  compact = false,
+  methodIds = PAYMENT_METHOD_IDS,
+}) {
   return (
     <div className={`pos-pay-method-group${compact ? " pos-pay-method-group--compact" : ""}`} role="radiogroup" aria-label={t("pos.payment")}>
-      {PAYMENT_METHOD_IDS.map((m) => {
+      {methodIds.map((m) => {
         const Icon = METHOD_ICONS[m];
         const active = value === m;
         return (

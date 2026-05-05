@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { resolveImageUrlForDisplay } from "../utils/imageUrl.js";
+import { useSafeImageSrc } from "../hooks/useSafeImageSrc.js";
 import { ProductImagePlaceholder } from "./ProductImagePlaceholder.jsx";
 
 /**
@@ -13,11 +13,11 @@ export function ProductImagePreview({
   style = {},
 }) {
   const [failed, setFailed] = useState(false);
-  const trimmed = resolveImageUrlForDisplay(url);
+  const trimmed = useSafeImageSrc(url);
 
   useEffect(() => {
     setFailed(false);
-  }, [trimmed]);
+  }, [url, trimmed]);
 
   if (!trimmed || failed) {
     return (
@@ -25,7 +25,7 @@ export function ProductImagePreview({
         style={{
           width,
           height,
-          borderRadius: 10,
+          borderRadius: 0,
           background: "var(--surface2)",
           display: "flex",
           alignItems: "center",
@@ -53,7 +53,7 @@ export function ProductImagePreview({
         width,
         height,
         objectFit: "cover",
-        borderRadius: 10,
+        borderRadius: 0,
         background: "var(--surface2)",
         display: "block",
         ...style,
