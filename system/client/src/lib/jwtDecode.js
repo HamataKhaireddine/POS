@@ -28,6 +28,8 @@ export function minimalUserFromTokenPayload(p) {
     organizationId: p.organizationId ?? null,
     organizationName: null,
     organizationSlug: null,
+    loyaltyProgramEnabled: false,
+    loyaltyRedemptionEnabled: false,
     isPlatformAdmin: false,
   };
 }

@@ -9,12 +9,34 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// مجال النشاط التجاري (يُختار عند إنشاء المؤسسة أو التسجيل الذاتي)
+enum BusinessVertical {
+  GROCERY
+  RESTAURANT
+  CAFE
+  PHONE_STORE
+  AUTO_DEALER
+  BOOKING_SERVICES
+  RETAIL_GENERAL
+  PHARMACY
+  CLOTHING
+  HARDWARE_ELECTRONICS
+  BEAUTY_SALON
+  PET_STORE
+  HOTEL
+  FITNESS
+  WHOLESALE
+  SERVICES_OTHER
+}
+
 /// مستأجر SaaS — عزل منطقي داخل نفس قاعدة PostgreSQL
 model Organization {
   id        String   @id @default(cuid())
   name      String
   /// للدخول عند تعدد المؤسسات: نفس البريد + slug
   slug      String?  @unique
+  /// نشاط المنشأة (بقالة، مطعم، …)
+  businessVertical BusinessVertical?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -380,7 +402,7 @@ model LoyaltyProgramSettings {
   id             String       @id @default(cuid())
   organizationId String       @unique
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  enabled        Boolean      @default(false)
+  enabled        Boolean      @default(true)
   earnBase       LoyaltyEarnBase @default(PER_ORDER_TOTAL)
   /// كل قدر من العملة يمنح earnPoints (مثلاً 10 = نقطة واحدة لكل 10 من العملة)
   earnEveryAmount   Decimal   @default(10)

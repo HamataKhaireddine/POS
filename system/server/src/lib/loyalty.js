@@ -8,10 +8,24 @@ export async function getOrCreateLoyaltySettings(db, organizationId) {
   });
   if (!row) {
     row = await db.loyaltyProgramSettings.create({
-      data: { organizationId },
+      data: { organizationId, enabled: true },
     });
   }
   return row;
+}
+
+/** ملخص للواجهة ولـ API العام — برنامج الولاء غير مرتبط بمجال النشاط، يُعطَّل يدوياً من الإعدادات */
+export function summarizeLoyaltyProgram(settingsRow) {
+  const enabled = Boolean(settingsRow?.enabled);
+  return {
+    loyaltyProgramEnabled: enabled,
+    loyaltyRedemptionEnabled: enabled && Boolean(settingsRow?.redemptionEnabled),
+  };
+}
+
+export async function getLoyaltyFlagsForOrganization(db, organizationId) {
+  const row = await getOrCreateLoyaltySettings(db, organizationId);
+  return summarizeLoyaltyProgram(row);
 }
 
 /**

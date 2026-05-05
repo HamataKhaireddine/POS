@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { useI18n } from "../context/LanguageContext.jsx";
+import { BUSINESS_VERTICAL_IDS } from "../lib/businessVerticalIds.js";
 
 const inp = {
   width: "100%",
@@ -23,6 +24,7 @@ export default function PlatformOrganizations() {
   const [form, setForm] = useState({
     organizationName: "",
     organizationSlug: "",
+    businessVertical: "",
     branchName: "",
     adminEmail: "",
     adminPassword: "",
@@ -53,6 +55,7 @@ export default function PlatformOrganizations() {
       body: {
         organizationName: form.organizationName,
         organizationSlug: form.organizationSlug,
+        businessVertical: form.businessVertical.trim() || undefined,
         branchName: form.branchName || undefined,
         adminEmail: form.adminEmail,
         adminPassword: form.adminPassword,
@@ -62,6 +65,7 @@ export default function PlatformOrganizations() {
     setForm({
       organizationName: "",
       organizationSlug: "",
+      businessVertical: "",
       branchName: "",
       adminEmail: "",
       adminPassword: "",
@@ -123,6 +127,19 @@ export default function PlatformOrganizations() {
             }
             style={inp}
           />
+          <select
+            aria-label={t("platform.businessVertical")}
+            value={form.businessVertical}
+            onChange={(e) => setForm({ ...form, businessVertical: e.target.value })}
+            style={inp}
+          >
+            <option value="">{t("platform.businessVertical")} ({t("common.none")})</option>
+            {BUSINESS_VERTICAL_IDS.map((id) => (
+              <option key={id} value={id}>
+                {t(`register.vertical.${id}`)}
+              </option>
+            ))}
+          </select>
           <input
             placeholder={t("platform.branchName")}
             value={form.branchName}
@@ -168,6 +185,7 @@ export default function PlatformOrganizations() {
               <tr style={{ color: "var(--muted)", textAlign: "start" }}>
                 <th style={th}>{t("platform.orgName")}</th>
                 <th style={th}>{t("platform.slug")}</th>
+                <th style={th}>{t("platform.businessVertical")}</th>
                 <th style={th}>{t("platform.branchesCount")}</th>
                 <th style={th}>{t("platform.usersCount")}</th>
                 <th style={th} />
@@ -188,6 +206,11 @@ export default function PlatformOrganizations() {
                           style={inp}
                         />
                       </td>
+                      <td style={td}>
+                        {o.businessVertical
+                          ? t(`register.vertical.${o.businessVertical}`)
+                          : t("common.none")}
+                      </td>
                       <td style={td}>{o._count?.branches ?? "—"}</td>
                       <td style={td}>{o._count?.users ?? "—"}</td>
                       <td style={td}>
@@ -204,6 +227,11 @@ export default function PlatformOrganizations() {
                       <td style={td}>{o.name}</td>
                       <td style={td}>
                         <code style={{ fontSize: 12 }}>{o.slug || "—"}</code>
+                      </td>
+                      <td style={td}>
+                        {o.businessVertical
+                          ? t(`register.vertical.${o.businessVertical}`)
+                          : t("common.none")}
                       </td>
                       <td style={td}>{o._count?.branches ?? "—"}</td>
                       <td style={td}>{o._count?.users ?? "—"}</td>

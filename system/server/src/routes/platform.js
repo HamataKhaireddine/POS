@@ -9,6 +9,7 @@ import {
 import { authMiddleware } from "../middleware/auth.js";
 import { requirePlatformAdmin } from "../middleware/platformAdmin.js";
 import { SLUG_RE, bootstrapOrganization } from "../lib/organizationBootstrap.js";
+import { normalizeBusinessVertical } from "../lib/businessVertical.js";
 
 const router = Router();
 
@@ -25,6 +26,7 @@ router.get("/organizations", async (_req, res, next) => {
         id: true,
         name: true,
         slug: true,
+        businessVertical: true,
         createdAt: true,
         _count: { select: { users: true, branches: true } },
       },
@@ -44,6 +46,7 @@ router.post("/organizations", async (req, res, next) => {
       adminEmail,
       adminPassword,
       adminName,
+      businessVertical: bvRaw,
     } = req.body || {};
     const name =
       organizationName != null ? String(organizationName).trim() : "";
@@ -70,6 +73,11 @@ router.post("/organizations", async (req, res, next) => {
       return res.status(409).json({ error: "هذا الرمز مستخدم لمؤسسة أخرى" });
     }
 
+    const bvNorm = normalizeBusinessVertical(bvRaw, { required: false });
+    if (bvRaw != null && String(bvRaw).trim() !== "" && bvNorm === undefined) {
+      return res.status(400).json({ error: "مجال النشاط غير صالح" });
+    }
+
     const { org, branch, user } = await bootstrapOrganization(prisma, {
       organizationName: name,
       organizationSlug: slugRaw,
@@ -77,6 +85,7 @@ router.post("/organizations", async (req, res, next) => {
       adminEmail,
       adminPassword,
       adminName,
+      ...(bvNorm ? { businessVertical: bvNorm } : {}),
     });
 
     res.status(201).json({
@@ -84,6 +93,7 @@ router.post("/organizations", async (req, res, next) => {
         id: org.id,
         name: org.name,
         slug: org.slug,
+        businessVertical: org.businessVertical ?? null,
         createdAt: org.createdAt,
       },
       branch: { id: branch.id, name: branch.name },

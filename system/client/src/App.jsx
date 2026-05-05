@@ -3,7 +3,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./context/AuthContext.jsx";
 import { useI18n } from "./context/LanguageContext.jsx";
 import { AppLayout } from "./components/layout/AppLayout.jsx";
+import { VerticalFeatureGate } from "./components/VerticalFeatureGate.jsx";
 import Login from "./pages/Login.jsx";
+import Register from "./pages/Register.jsx";
 import POS from "./pages/POS.jsx";
 import Wholesale from "./pages/Wholesale.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
@@ -122,6 +124,7 @@ export default function App() {
     <React.Suspense fallback={lazyFallback}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route
           path="/platform"
           element={
@@ -145,7 +148,14 @@ export default function App() {
         >
           <Route path="/" element={<Navigate to="/pos" replace />} />
           <Route path="/pos" element={<POS />} />
-          <Route path="/wholesale" element={<Wholesale />} />
+          <Route
+            path="/wholesale"
+            element={
+              <VerticalFeatureGate feature="wholesale">
+                <Wholesale />
+              </VerticalFeatureGate>
+            }
+          />
           <Route path="/sync-queue" element={<SyncQueueStatus />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/dashboard" element={<Dashboard />} />
@@ -178,7 +188,9 @@ export default function App() {
             path="/appointments"
             element={
               <Protected roles={["ADMIN", "MANAGER"]}>
-                <Appointments />
+                <VerticalFeatureGate feature="appointments">
+                  <Appointments />
+                </VerticalFeatureGate>
               </Protected>
             }
           />
@@ -210,7 +222,9 @@ export default function App() {
             path="/delivery"
             element={
               <Protected roles={["ADMIN", "MANAGER"]}>
-                <DeliveryRouting />
+                <VerticalFeatureGate feature="delivery">
+                  <DeliveryRouting />
+                </VerticalFeatureGate>
               </Protected>
             }
           />
@@ -230,8 +244,22 @@ export default function App() {
           </Route>
           <Route path="/products" element={<Products />} />
           <Route path="/customers" element={<Customers />} />
-          <Route path="/customer-accounts" element={<CustomerReceivables />} />
-          <Route path="/customer-accounts/:customerId" element={<CustomerAccountDetail />} />
+          <Route
+            path="/customer-accounts"
+            element={
+              <VerticalFeatureGate feature="customerAccounts">
+                <CustomerReceivables />
+              </VerticalFeatureGate>
+            }
+          />
+          <Route
+            path="/customer-accounts/:customerId"
+            element={
+              <VerticalFeatureGate feature="customerAccounts">
+                <CustomerAccountDetail />
+              </VerticalFeatureGate>
+            }
+          />
           <Route
             path="/users"
             element={

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
+import { isVerticalFeatureEnabled } from "../lib/verticalFeatures.js";
 
 const inp = {
   padding: 12,
@@ -14,7 +15,8 @@ const inp = {
 
 export default function Customers() {
   const { t } = useI18n();
-  const { isAdmin, isManager } = useAuth();
+  const { isAdmin, isManager, user } = useAuth();
+  const showReceivable = isVerticalFeatureEnabled("customerAccounts", user?.businessVertical);
   const [list, setList] = useState([]);
   const [q, setQ] = useState("");
   const [form, setForm] = useState({ name: "", phone: "", email: "", notes: "" });
@@ -137,7 +139,7 @@ export default function Customers() {
               <th style={th}>{t("customers.colBalance")}</th>
               <th style={th}>{t("customers.email")}</th>
               <th style={th}>{t("customers.notes")}</th>
-              <th style={th}>{t("customers.receivable")}</th>
+              {showReceivable ? <th style={th}>{t("customers.receivable")}</th> : null}
               {isManager ? <th style={th} /> : null}
             </tr>
           </thead>
@@ -174,7 +176,7 @@ export default function Customers() {
                       style={inp}
                     />
                   </td>
-                  <td style={td}>—</td>
+                  {showReceivable ? <td style={td}>—</td> : null}
                   {isManager ? (
                     <td style={td}>
                       <form onSubmit={saveEdit} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -195,11 +197,13 @@ export default function Customers() {
                   <td style={td}>{Number(c.accountBalance ?? 0).toFixed(2)}</td>
                   <td style={td}>{c.email || "—"}</td>
                   <td style={td}>{c.notes || "—"}</td>
-                  <td style={td}>
-                    <Link to={`/customer-accounts/${c.id}`} style={{ fontSize: 13 }}>
-                      {t("receivable.open")}
-                    </Link>
-                  </td>
+                  {showReceivable ? (
+                    <td style={td}>
+                      <Link to={`/customer-accounts/${c.id}`} style={{ fontSize: 13 }}>
+                        {t("receivable.open")}
+                      </Link>
+                    </td>
+                  ) : null}
                   {isManager ? (
                     <td style={td}>
                       <button type="button" className="btn-touch" onClick={() => setEditing({ ...c })}>

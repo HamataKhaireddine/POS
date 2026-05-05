@@ -76,6 +76,11 @@ export default function LoyaltyCoupons() {
       });
       setSettings(row);
       setMsg(t("loyalty.saved"));
+      try {
+        window.dispatchEvent(new Event("loyalty-settings-changed"));
+      } catch {
+        /* ignore */
+      }
     } catch (e) {
       setMsg(e.message || t("loyalty.saveError"));
     } finally {
@@ -158,6 +163,9 @@ export default function LoyaltyCoupons() {
 
       <section style={card}>
         <h2 style={{ marginTop: 0 }}>{t("loyalty.sectionProgram")}</h2>
+        <p style={{ marginTop: 0, marginBottom: 12, fontSize: 13, color: "var(--muted)", lineHeight: 1.45 }}>
+          {t("loyalty.allVerticalsHint")}
+        </p>
         <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <input
             type="checkbox"

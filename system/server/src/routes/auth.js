@@ -9,22 +9,32 @@ import { databaseUrlFingerprint } from "../lib/databaseUrlFingerprint.js";
 import { signToken, authMiddleware } from "../middleware/auth.js";
 import { SLUG_RE, bootstrapOrganization } from "../lib/organizationBootstrap.js";
 import { isPlatformAdminEmail } from "../lib/platformAdmin.js";
+import { normalizeBusinessVertical } from "../lib/businessVertical.js";
+import { getLoyaltyFlagsForOrganization } from "../lib/loyalty.js";
 
 const router = Router();
 
 /**
  * إنشاء شركة (مؤسسة) جديدة + فرع رئيسي + مدير ADMIN.
- * يتطلب ORG_REGISTRATION_SECRET في الخادم ونفس القيمة في الحقل registrationSecret.
+ * إما ALLOW_PUBLIC_ORG_REGISTRATION=true على الخادم، أو تطابق registrationSecret مع ORG_REGISTRATION_SECRET (8+ أحرف).
  */
 router.post("/register-organization", async (req, res, next) => {
   try {
+    const allowPublic =
+      String(process.env.ALLOW_PUBLIC_ORG_REGISTRATION || "")
+        .toLowerCase()
+        .trim() === "true";
     const serverSecret = process.env.ORG_REGISTRATION_SECRET;
-    if (!serverSecret || String(serverSecret).length < 8) {
+    const hasStrongSecret =
+      serverSecret != null && String(serverSecret).trim().length >= 8;
+
+    if (!allowPublic && !hasStrongSecret) {
       return res.status(403).json({
         error:
-          "تسجيل مؤسسات جديد معطّل. اضبط ORG_REGISTRATION_SECRET في ملف .env للخادم (8 أحرف على الأقل).",
+          "إنشاء حساب من الواجهة معطّل. على الخادم فعّل ALLOW_PUBLIC_ORG_REGISTRATION=true أو ضع ORG_REGISTRATION_SECRET (8 أحرف على الأقل).",
       });
     }
+
     const {
       registrationSecret,
       organizationName,
@@ -33,9 +43,18 @@ router.post("/register-organization", async (req, res, next) => {
       adminEmail,
       adminPassword,
       adminName,
+      businessVertical: businessVerticalRaw,
     } = req.body || {};
-    if (registrationSecret !== serverSecret) {
+
+    if (!allowPublic && registrationSecret !== serverSecret) {
       return res.status(401).json({ error: "رمز التسجيل غير صحيح" });
+    }
+
+    const businessVertical = normalizeBusinessVertical(businessVerticalRaw, {
+      required: true,
+    });
+    if (!businessVertical) {
+      return res.status(400).json({ error: "اختر مجال النشاط التجاري من القائمة" });
     }
     const name = organizationName != null ? String(organizationName).trim() : "";
     const slugRaw =
@@ -69,6 +88,7 @@ router.post("/register-organization", async (req, res, next) => {
       adminEmail: emailNorm,
       adminPassword,
       adminName,
+      businessVertical,
     });
 
     const token = signToken({
@@ -77,6 +97,8 @@ router.post("/register-organization", async (req, res, next) => {
       branchId: result.user.branchId,
       organizationId: result.user.organizationId,
     });
+
+    const loyaltyFlags = await getLoyaltyFlagsForOrganization(prisma, result.org.id);
 
     res.status(201).json({
       token,
@@ -92,6 +114,8 @@ router.post("/register-organization", async (req, res, next) => {
         organizationId: result.org.id,
         organizationName: result.org.name,
         organizationSlug: result.org.slug,
+        businessVertical: result.org.businessVertical ?? null,
+        ...loyaltyFlags,
         isPlatformAdmin:
           result.user.role === "ADMIN" &&
           isPlatformAdminEmail(result.user.email),
@@ -163,6 +187,7 @@ router.post("/login", async (req, res, next) => {
       branchId: user.branchId,
       organizationId: user.organizationId,
     });
+    const loyaltyFlags = await getLoyaltyFlagsForOrganization(prisma, user.organizationId);
     res.json({
       token,
       user: {
@@ -177,6 +202,8 @@ router.post("/login", async (req, res, next) => {
         organizationId: user.organizationId,
         organizationName: user.organization?.name ?? null,
         organizationSlug: user.organization?.slug ?? null,
+        businessVertical: user.organization?.businessVertical ?? null,
+        ...loyaltyFlags,
         isPlatformAdmin:
           user.role === "ADMIN" && isPlatformAdminEmail(user.email),
       },
@@ -197,6 +224,7 @@ router.get("/me", authMiddleware, async (req, res, next) => {
       include: { branch: true, organization: true },
     });
     if (!user) return res.status(404).json({ error: "المستخدم غير موجود" });
+    const loyaltyFlags = await getLoyaltyFlagsForOrganization(prisma, user.organizationId);
     res.json({
       id: user.id,
       email: user.email,
@@ -209,6 +237,8 @@ router.get("/me", authMiddleware, async (req, res, next) => {
       organizationId: user.organizationId,
       organizationName: user.organization?.name ?? null,
       organizationSlug: user.organization?.slug ?? null,
+      businessVertical: user.organization?.businessVertical ?? null,
+      ...loyaltyFlags,
       isPlatformAdmin:
         user.role === "ADMIN" && isPlatformAdminEmail(user.email),
     });

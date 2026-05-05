@@ -88,6 +88,18 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
+  /** إنشاء مؤسسة + حساب مدير ثم تسجيل الدخول تلقائياً */
+  const registerOrganization = async (body) => {
+    const data = await api("/api/auth/register-organization", {
+      method: "POST",
+      body,
+    });
+    localStorage.setItem("token", data.token);
+    setUser(data.user);
+    setCachedSessionUser(data.user);
+    return data.user;
+  };
+
   const logout = () => {
     localStorage.removeItem("token");
     setCachedSessionUser(null);
@@ -100,6 +112,7 @@ export function AuthProvider({ children }) {
       user,
       loading,
       login,
+      registerOrganization,
       logout,
       isAdmin: user?.role === "ADMIN",
       isManager: user?.role === "MANAGER" || user?.role === "ADMIN",

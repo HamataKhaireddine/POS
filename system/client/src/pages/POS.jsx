@@ -30,6 +30,7 @@ import { buildOfflineSalePreview } from "../offline/offlineSale.js";
 import { branchDisplayName } from "../utils/displayLabels.js";
 import { buildReceiptPlainText } from "../utils/receiptText.js";
 import { isUnitPriceAtOrBelowCost } from "../utils/saleCostWarning.js";
+import { isVerticalFeatureEnabled } from "../lib/verticalFeatures.js";
 
 function round2(n) {
   return Math.round(n * 100) / 100;
@@ -73,6 +74,9 @@ export default function POS() {
   const useWholesalePricing = useCartStore((s) => s.useWholesalePricing);
   const setUseWholesalePricing = useCartStore((s) => s.setUseWholesalePricing);
   const syncLinePricesFromProducts = useCartStore((s) => s.syncLinePricesFromProducts);
+
+  const showPetTypeFilter = isVerticalFeatureEnabled("petPosFilters", user?.businessVertical);
+  const showWholesaleToggle = isVerticalFeatureEnabled("wholesale", user?.businessVertical);
   const addProduct = useCartStore((s) => s.addProduct);
   const setQty = useCartStore((s) => s.setQuantity);
   const removeLine = useCartStore((s) => s.removeLine);
@@ -121,6 +125,45 @@ export default function POS() {
     const bid = branchId || user?.branchId;
     if (bid) setBranchCart(bid);
   }, [branchId, user?.branchId, setBranchCart]);
+
+  useEffect(() => {
+    if (!showPetTypeFilter) setPetFilter("");
+  }, [showPetTypeFilter]);
+
+  useEffect(() => {
+    if (!showWholesaleToggle) setUseWholesalePricing(false);
+  }, [showWholesaleToggle, setUseWholesalePricing]);
+
+  const [loyaltyFlags, setLoyaltyFlags] = useState({
+    loyaltyProgramEnabled: Boolean(user?.loyaltyProgramEnabled),
+    loyaltyRedemptionEnabled: Boolean(user?.loyaltyRedemptionEnabled),
+  });
+
+  useEffect(() => {
+    const load = () => {
+      api("/api/loyalty-settings/status")
+        .then((s) =>
+          setLoyaltyFlags({
+            loyaltyProgramEnabled: Boolean(s?.loyaltyProgramEnabled),
+            loyaltyRedemptionEnabled: Boolean(s?.loyaltyRedemptionEnabled),
+          })
+        )
+        .catch(() =>
+          setLoyaltyFlags({ loyaltyProgramEnabled: false, loyaltyRedemptionEnabled: false })
+        );
+    };
+    load();
+    window.addEventListener("focus", load);
+    window.addEventListener("loyalty-settings-changed", load);
+    return () => {
+      window.removeEventListener("focus", load);
+      window.removeEventListener("loyalty-settings-changed", load);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!loyaltyFlags.loyaltyRedemptionEnabled) setLoyaltyPointsInput("");
+  }, [loyaltyFlags.loyaltyRedemptionEnabled]);
 
   const loadProducts = useCallback(async () => {
     const bid = branchId || user?.branchId;
@@ -531,41 +574,45 @@ export default function POS() {
             color: "var(--text)",
           }}
         />
-        <select
-          value={petFilter}
-          onChange={(e) => setPetFilter(e.target.value)}
-          style={{
-            minHeight: 44,
-            padding: "8px 12px",
-            borderRadius: 0,
-            background: "var(--surface)",
-            color: "var(--text)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <option value="">{t("pos.petAll")}</option>
-          <option value="CAT">{t("pet.cat")}</option>
-          <option value="DOG">{t("pet.dog")}</option>
-          <option value="OTHER">{t("pet.other")}</option>
-        </select>
+        {showPetTypeFilter ? (
+          <select
+            value={petFilter}
+            onChange={(e) => setPetFilter(e.target.value)}
+            style={{
+              minHeight: 44,
+              padding: "8px 12px",
+              borderRadius: 0,
+              background: "var(--surface)",
+              color: "var(--text)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <option value="">{t("pos.petAll")}</option>
+            <option value="CAT">{t("pet.cat")}</option>
+            <option value="DOG">{t("pet.dog")}</option>
+            <option value="OTHER">{t("pet.other")}</option>
+          </select>
+        ) : null}
         <button type="button" className="btn-touch" onClick={() => loadProducts()} style={{ background: "var(--surface2)" }}>
           {t("pos.refresh")}
         </button>
-        <button
-          type="button"
-          className="btn-touch"
-          onClick={() => {
-            setUseWholesalePricing(!useWholesalePricing);
-          }}
-          style={{
-            background: useWholesalePricing ? "var(--accent2)" : "var(--surface2)",
-            color: useWholesalePricing ? "#fff" : "var(--text)",
-            border: useWholesalePricing ? "2px solid var(--accent2)" : "1px solid var(--border)",
-          }}
-          title={t("pos.wholesaleHint")}
-        >
-          {useWholesalePricing ? t("pos.wholesaleOn") : t("pos.wholesaleOff")}
-        </button>
+        {showWholesaleToggle ? (
+          <button
+            type="button"
+            className="btn-touch"
+            onClick={() => {
+              setUseWholesalePricing(!useWholesalePricing);
+            }}
+            style={{
+              background: useWholesalePricing ? "var(--accent2)" : "var(--surface2)",
+              color: useWholesalePricing ? "#fff" : "var(--text)",
+              border: useWholesalePricing ? "2px solid var(--accent2)" : "1px solid var(--border)",
+            }}
+            title={t("pos.wholesaleHint")}
+          >
+            {useWholesalePricing ? t("pos.wholesaleOn") : t("pos.wholesaleOff")}
+          </button>
+        ) : null}
       </div>
 
       <div
@@ -774,7 +821,9 @@ export default function POS() {
                 {t("pos.quickCustomerBtn")}
               </button>
             </div>
-            {selectedCustomer && typeof selectedCustomer.loyaltyPoints === "number" ? (
+            {loyaltyFlags.loyaltyProgramEnabled &&
+            selectedCustomer &&
+            typeof selectedCustomer.loyaltyPoints === "number" ? (
               <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>
                 {t("pos.loyaltyBalance")}: <strong>{selectedCustomer.loyaltyPoints}</strong>
               </div>
@@ -816,27 +865,35 @@ export default function POS() {
                 }}
               />
             </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.loyaltyRedeem")}</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={loyaltyPointsInput}
-                onChange={(e) => setLoyaltyPointsInput(e.target.value)}
-                placeholder="0"
-                style={{
-                  minHeight: 44,
-                  padding: "0 12px",
-                  borderRadius: 0,
-                  border: "1px solid var(--border)",
-                  background: "var(--bg)",
-                  color: "var(--text)",
-                }}
-              />
-            </label>
-            <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--muted)" }}>
-              {t("pos.loyaltyPreviewHint")}
-            </p>
+            {loyaltyFlags.loyaltyRedemptionEnabled ? (
+              <>
+                <label style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.loyaltyRedeem")}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={loyaltyPointsInput}
+                    onChange={(e) => setLoyaltyPointsInput(e.target.value)}
+                    placeholder="0"
+                    style={{
+                      minHeight: 44,
+                      padding: "0 12px",
+                      borderRadius: 0,
+                      border: "1px solid var(--border)",
+                      background: "var(--bg)",
+                      color: "var(--text)",
+                    }}
+                  />
+                </label>
+                <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--muted)" }}>
+                  {t("pos.loyaltyPreviewHint")}
+                </p>
+              </>
+            ) : loyaltyFlags.loyaltyProgramEnabled ? (
+              <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--muted)" }}>
+                {t("pos.loyaltyRedeemDisabled")}
+              </p>
+            ) : null}
             <PaymentSectionHeading t={t} />
             <SplitPaymentToggle
               enabled={splitEnabled}

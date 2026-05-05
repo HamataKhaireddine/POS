@@ -1,10 +1,23 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authMiddleware, requireRole } from "../middleware/auth.js";
-import { getOrCreateLoyaltySettings } from "../lib/loyalty.js";
+import {
+  getOrCreateLoyaltySettings,
+  summarizeLoyaltyProgram,
+} from "../lib/loyalty.js";
 
 const router = Router();
 router.use(authMiddleware);
+
+/** حالة الولاء لجميع الأدوار (نقطة البيع، إلخ) — لا يغيّر الإعدادات */
+router.get("/status", async (req, res, next) => {
+  try {
+    const row = await getOrCreateLoyaltySettings(prisma, req.user.organizationId);
+    res.json(summarizeLoyaltyProgram(row));
+  } catch (e) {
+    next(e);
+  }
+});
 
 router.get("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   const row = await getOrCreateLoyaltySettings(prisma, req.user.organizationId);

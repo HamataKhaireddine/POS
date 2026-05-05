@@ -6,6 +6,7 @@ import { useI18n } from "../../context/LanguageContext.jsx";
 import { formatUserBranchLine } from "../../utils/displayLabels.js";
 import { OfflineBanner } from "../OfflineBanner.jsx";
 import { useAlertsBadgeCount } from "../../hooks/useAlertsBadgeCount.js";
+import { isVerticalFeatureEnabled } from "../../lib/verticalFeatures.js";
 
 const STORAGE_KEY = "sidebarOpen";
 
@@ -111,6 +112,7 @@ function SidebarNavSection({ sectionId, title, expanded, onToggle, t, children }
 
 export function AppLayout() {
   const { user, logout, isAdmin, isManager, isPlatformAdmin } = useAuth();
+  const bv = user?.businessVertical;
   const { theme, toggleTheme } = useTheme();
   const { t, locale, setLocale } = useI18n();
   const nav = useNavigate();
@@ -170,6 +172,18 @@ export function AppLayout() {
       >
         <div className="app-sidebar-header">
           <div className="app-sidebar-brand">{t("nav.brand")}</div>
+          {bv ? (
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--muted)",
+                padding: "0 14px 6px",
+                lineHeight: 1.35,
+              }}
+            >
+              {t("nav.verticalNavHint")}
+            </div>
+          ) : null}
           <button
             type="button"
             className="app-sidebar-pin"
@@ -191,9 +205,11 @@ export function AppLayout() {
             <NavLink to="/pos" style={sidebarLink} end>
               {t("nav.pos")}
             </NavLink>
-            <NavLink to="/wholesale" style={sidebarLink}>
-              {t("nav.wholesale")}
-            </NavLink>
+            {isVerticalFeatureEnabled("wholesale", bv) ? (
+              <NavLink to="/wholesale" style={sidebarLink}>
+                {t("nav.wholesale")}
+              </NavLink>
+            ) : null}
             <NavLink to="/cash" style={sidebarLink}>
               {t("nav.cash")}
             </NavLink>
@@ -256,9 +272,11 @@ export function AppLayout() {
             <NavLink to="/customers" style={sidebarLink}>
               {t("nav.customers")}
             </NavLink>
-            <NavLink to="/customer-accounts" style={sidebarLink}>
-              {t("nav.receivable")}
-            </NavLink>
+            {isVerticalFeatureEnabled("customerAccounts", bv) ? (
+              <NavLink to="/customer-accounts" style={sidebarLink}>
+                {t("nav.receivable")}
+              </NavLink>
+            ) : null}
           </SidebarNavSection>
 
           <SidebarNavSection
@@ -322,7 +340,7 @@ export function AppLayout() {
                 {t("nav.reports")}
               </NavLink>
             ) : null}
-            {isManager ? (
+            {isManager && isVerticalFeatureEnabled("appointments", bv) ? (
               <NavLink to="/appointments" style={sidebarLink}>
                 {t("nav.appointments")}
               </NavLink>
@@ -342,7 +360,7 @@ export function AppLayout() {
                 {t("nav.commissions")}
               </NavLink>
             ) : null}
-            {isManager ? (
+            {isManager && isVerticalFeatureEnabled("delivery", bv) ? (
               <NavLink to="/delivery" style={sidebarLink}>
                 {t("nav.delivery")}
               </NavLink>

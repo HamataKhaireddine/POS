@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useTheme } from "../context/ThemeContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
@@ -171,10 +171,15 @@ export default function Login() {
         <button
           type="submit"
           className="btn-touch"
-          style={{ width: "100%", background: "var(--accent)", color: "#fff" }}
+          style={{ width: "100%", background: "var(--accent)", color: "#fff", marginBottom: 12 }}
         >
           {t("login.submit")}
         </button>
+        <div style={{ textAlign: "center", fontSize: 14 }}>
+          <Link to="/register" style={{ color: "var(--accent)" }}>
+            {t("login.createAccount")}
+          </Link>
+        </div>
       </form>
     </div>
   );

@@ -14,6 +14,7 @@ export async function bootstrapOrganization(prisma, input) {
     adminEmail,
     adminPassword,
     adminName,
+    businessVertical,
   } = input;
 
   const name = String(organizationName).trim().slice(0, 200);
@@ -29,6 +30,7 @@ export async function bootstrapOrganization(prisma, input) {
     data: {
       name,
       slug: slugRaw,
+      ...(businessVertical != null ? { businessVertical } : {}),
     },
   });
   const branch = await prisma.branch.create({
